@@ -1,0 +1,24 @@
+# Ignore node_modules in Docker context
+node_modules/
+npm-debug.log
+.env
+.git/
+.gitignore
+README.md
+README-DOCKER.md
+*.log
+data/*
+!data/logo.png
+!data/bmc-brand-logo.png
+!data/bmc-brand-logo.svg
+!data/bmc-brand-icon.png
+!data/bmc-brand-icon.svg
+sessions/
+library/
+videos/
+# Test scripts
+check-matching.js
+test-title-matching.js
+manual-match.js
+test-ftp-paths.js
+test-exact-command.js

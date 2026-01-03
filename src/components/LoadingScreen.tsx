@@ -1,0 +1,55 @@
+import { useEffect, useState } from 'react';
+import './LoadingScreen.css';
+
+interface LoadingScreenProps {
+  message?: string;
+}
+
+function LoadingScreen({ message = 'Loading...' }: LoadingScreenProps) {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 95) return prev;
+        const increment = Math.random() * 15;
+        return Math.min(prev + increment, 95);
+      });
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="loading-screen">
+      <div className="loading-content">
+        <div className="logo-container">
+          <img src="/logo.png" alt="Logo" className="loading-logo" />
+          <div className="logo-glow"></div>
+        </div>
+        
+        <h2 className="loading-title">Bambu Lab Integration</h2>
+        <p className="loading-message">{message}</p>
+        
+        <div className="loading-bar-container">
+          <div className="loading-bar-track">
+            <div 
+              className="loading-bar-fill" 
+              style={{ width: `${progress}%` }}
+            ></div>
+            <div className="loading-bar-shine"></div>
+          </div>
+          <span className="loading-percentage">{Math.round(progress)}%</span>
+        </div>
+
+        <div className="loading-dots">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default LoadingScreen;

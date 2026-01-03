@@ -1,0 +1,177 @@
+const mqtt = require('mqtt');
+const EventEmitter = require('events');
+
+class BambuMqttClient extends EventEmitter {
+  constructor(printerIp, serialNumber, accessCode) {
+    super();
+    this.printerIp = printerIp;
+    this.serialNumber = serialNumber;
+    this.accessCode = accessCode;
+    this.client = null;
+    this.connected = false;
+    this.currentJobData = null;
+  }
+
+  connect() {
+    return new Promise((resolve, reject) => {
+      const options = {
+        clientId: `bambu-web-${Date.now()}`,
+        username: 'bblp',
+        password: this.accessCode,
+        protocol: 'mqtts',
+        rejectUnauthorized: false, // Bambu uses self-signed certs
+        reconnectPeriod: 5000,
+        connectTimeout: 10000
+      };
+
+      console.log(`Connecting to Bambu printer MQTT at ${this.printerIp}:8883`);
+      this.client = mqtt.connect(`mqtts://${this.printerIp}:8883`, options);
+
+      this.client.on('connect', () => {
+        console.log('Connected to Bambu printer MQTT');
+        this.connected = true;
+        
+        // Subscribe to printer status updates
+        const topic = `device/${this.serialNumber}/report`;
+        this.client.subscribe(topic, (err) => {
+          if (err) {
+            console.error('MQTT subscribe error:', err);
+            reject(err);
+          } else {
+            console.log(`Subscribed to ${topic}`);
+            
+            // Request current status
+            this.requestStatus();
+            resolve();
+          }
+        });
+      });
+
+      this.client.on('message', (topic, message) => {
+        try {
+          const data = JSON.parse(message.toString());
+          this.handleMessage(data);
+        } catch (error) {
+          console.error('Error parsing MQTT message:', error);
+        }
+      });
+
+      this.client.on('error', (error) => {
+        console.error('MQTT error:', error);
+        this.connected = false;
+        this.emit('error', error);
+      });
+
+      this.client.on('close', () => {
+        console.log('MQTT connection closed');
+        this.connected = false;
+        this.emit('disconnected');
+      });
+
+      // Timeout if connection takes too long
+      setTimeout(() => {
+        if (!this.connected) {
+          reject(new Error('MQTT connection timeout'));
+        }
+      }, 15000);
+    });
+  }
+
+  handleMessage(data) {
+    // Bambu sends print data in the 'print' object
+    if (data.print) {
+      const printData = data.print;
+      
+      // Debug: Log ipcam data if present
+      if (printData.ipcam) {
+        console.log('📹 P1S Camera RTSP URL detected:', printData.ipcam.rtsp_url || 'No URL');
+      }
+      
+      // Initialize currentJobData if null
+      if (!this.currentJobData) {
+        this.currentJobData = {
+          name: 'Unknown',
+          gcode_file: '',
+          subtask_name: '',
+          progress: 0,
+          remaining_time: 0,
+          end_time: null,
+          layer_num: 0,
+          total_layers: 0,
+          gcode_state: 'IDLE',
+          print_error: 0
+        };
+      }
+      
+      // Calculate end time from remaining_time (in minutes)
+      let endTime = this.currentJobData.end_time || null;
+      const remainingMinutes = printData.mc_remaining_time !== undefined ? printData.mc_remaining_time : (this.currentJobData.remaining_time || 0);
+      if (remainingMinutes > 0) {
+        endTime = new Date(Date.now() + remainingMinutes * 60 * 1000).toISOString();
+      }
+      
+      // Merge new data with existing data, keeping good values
+      // Only update fields that are actually present in the message
+      const newJobData = {
+        name: printData.subtask_name || printData.gcode_file || this.currentJobData.name || 'Unknown',
+        gcode_file: printData.gcode_file || this.currentJobData.gcode_file || '',
+        subtask_name: printData.subtask_name || this.currentJobData.subtask_name || '',
+        progress: printData.mc_percent !== undefined ? printData.mc_percent : (this.currentJobData.progress || 0),
+        remaining_time: remainingMinutes,
+        end_time: endTime,
+        layer_num: printData.layer_num !== undefined ? printData.layer_num : (this.currentJobData.layer_num || 0),
+        total_layers: printData.total_layer_num || this.currentJobData.total_layers || 0,
+        gcode_state: printData.gcode_state || this.currentJobData.gcode_state || 'IDLE',
+        print_error: printData.print_error !== undefined ? printData.print_error : (this.currentJobData.print_error || 0)
+      };
+      
+      // Extract integrated camera RTSP URL from P1S
+      if (printData.ipcam && printData.ipcam.rtsp_url) {
+        newJobData.rtsp_url = printData.ipcam.rtsp_url;
+      } else if (this.currentJobData.rtsp_url) {
+        newJobData.rtsp_url = this.currentJobData.rtsp_url;
+      }
+      
+      this.currentJobData = newJobData;
+      this.emit('job_update', this.currentJobData);
+      console.log('Job update:', this.currentJobData);
+    }
+  }
+
+  requestStatus() {
+    if (!this.client || !this.connected) {
+      return;
+    }
+
+    // Request push_all to get current status
+    const topic = `device/${this.serialNumber}/request`;
+    const message = {
+      pushing: {
+        sequence_id: Date.now().toString(),
+        command: 'pushall'
+      }
+    };
+
+    this.client.publish(topic, JSON.stringify(message), (err) => {
+      if (err) {
+        console.error('Error requesting status:', err);
+      } else {
+        console.log('Requested printer status');
+      }
+    });
+  }
+
+  getCurrentJob() {
+    return this.currentJobData;
+  }
+
+  disconnect() {
+    if (this.client) {
+      this.client.end();
+      this.connected = false;
+      this.currentJobData = null;
+    }
+  }
+}
+
+module.exports = BambuMqttClient;

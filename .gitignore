@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+
+# Environment files
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Application data
+data/
+sessions/
+library/
+my-3d-models/
+videos/
+
+# Build output
+dist/
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.backup
+*-OLD.md
+simple-server.js.container-backup
+simple-server-with-covers.js
+
+# Test files
+test-*.js
+check-*.js
+manual-match*.js
+convert-test-video.js
+nginx-config-fix.txt

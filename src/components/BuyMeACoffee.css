@@ -1,0 +1,34 @@
+/* Buy Me a Coffee Button */
+.bmc-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  width: 100%;
+  background: linear-gradient(135deg, #FFDD00 0%, #FDB813 100%);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(255, 221, 0, 0.2);
+}
+
+.bmc-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 221, 0, 0.4);
+}
+
+.bmc-button .bmc-logo {
+  width: 100%;
+  height: auto;
+  max-height: 40px;
+  object-fit: contain;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .bmc-button {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+}

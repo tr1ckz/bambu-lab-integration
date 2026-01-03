@@ -1,0 +1,312 @@
+import { useState, useEffect } from 'react';
+import './Duplicates.css';
+import Toast from './Toast';
+import ConfirmModal from './ConfirmModal';
+import LoadingScreen from './LoadingScreen';
+
+interface LibraryFile {
+  id: number;
+  fileName: string;
+  originalName: string;
+  fileType: string;
+  fileSize: number;
+  filePath: string;
+  thumbnailPath?: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+  fileHash?: string;
+}
+
+interface DuplicateGroup {
+  name: string;
+  files: LibraryFile[];
+  totalSize: number;
+  reason?: string;
+}
+
+function Duplicates() {
+  const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set());
+  const [groupBy, setGroupBy] = useState<'hash' | 'name' | 'size'>('hash');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  useEffect(() => {
+    loadDuplicates();
+  }, [groupBy]);
+
+  const loadDuplicates = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/library/duplicates?groupBy=${groupBy}`);
+      const data = await response.json();
+      setDuplicates(data.duplicates || []);
+    } catch (error) {
+      console.error('Failed to load duplicates:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleFileSelection = (fileId: number) => {
+    const newSelection = new Set(selectedFiles);
+    if (newSelection.has(fileId)) {
+      newSelection.delete(fileId);
+    } else {
+      newSelection.add(fileId);
+    }
+    setSelectedFiles(newSelection);
+  };
+
+  const selectAllInGroup = (group: DuplicateGroup) => {
+    const newSelection = new Set(selectedFiles);
+    group.files.forEach(file => newSelection.add(file.id));
+    setSelectedFiles(newSelection);
+  };
+
+  const selectSuggestedInGroup = (group: DuplicateGroup) => {
+    // Keep the oldest file (lowest ID), select others for deletion
+    const sorted = [...group.files].sort((a, b) => a.id - b.id);
+    const newSelection = new Set(selectedFiles);
+    sorted.slice(1).forEach(file => newSelection.add(file.id));
+    setSelectedFiles(newSelection);
+  };
+
+  const selectAllDuplicates = () => {
+    // Select all duplicates from all groups (keeping oldest in each group)
+    const newSelection = new Set<number>();
+    duplicates.forEach(group => {
+      const sorted = [...group.files].sort((a, b) => a.id - b.id);
+      sorted.slice(1).forEach(file => newSelection.add(file.id));
+    });
+    setSelectedFiles(newSelection);
+  };
+
+  const handleDeleteClick = () => {
+    if (selectedFiles.size === 0) {
+      setToast({ message: 'No files selected for deletion', type: 'error' });
+      return;
+    }
+    setConfirmDelete(true);
+  };
+
+  const deleteSelectedFiles = async () => {
+    setConfirmDelete(false);
+
+    try {
+      const deletePromises = Array.from(selectedFiles).map(fileId =>
+        fetch(`/api/library/${fileId}`, { method: 'DELETE' })
+      );
+      
+      await Promise.all(deletePromises);
+      
+      setSelectedFiles(new Set());
+      loadDuplicates();
+      
+      setToast({ message: `Successfully deleted ${deletePromises.length} file(s)`, type: 'success' });
+    } catch (error) {
+      console.error('Failed to delete files:', error);
+      setToast({ message: 'Failed to delete some files. Please try again.', type: 'error' });
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+  };
+
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+  };
+
+  const totalSelectedSize = duplicates
+    .flatMap(group => group.files)
+    .filter(file => selectedFiles.has(file.id))
+    .reduce((sum, file) => sum + file.filesize, 0);
+
+  if (loading) {
+    return <LoadingScreen message="Scanning for duplicates..." />;
+  }
+
+  return (
+    <div className="duplicates-container">
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+      
+      <div className="duplicates-header">
+        <h1>Duplicate Files</h1>
+        <p className="duplicates-description">
+          Find and remove duplicate files to free up space
+        </p>
+      </div>
+
+      {duplicates.length > 0 && (
+        <div className="caution-banner">
+          <div className="caution-icon">⚠️</div>
+          <div className="caution-content">
+            <strong>Caution:</strong> The "Select All Duplicates" feature keeps the oldest copy of each file and marks the rest for deletion. 
+            Review your selections carefully before deleting to avoid removing files you want to keep.
+          </div>
+          <button 
+            className="btn btn-warning"
+            onClick={selectAllDuplicates}
+          >
+            Select All Duplicates
+          </button>
+        </div>
+      )}
+
+      <div className="duplicates-toolbar">
+        <div className="toolbar-left">
+          <label>
+            Group by:
+            <select 
+              value={groupBy} 
+              onChange={(e) => setGroupBy(e.target.value as 'hash' | 'name' | 'size')}
+              className="group-select"
+            >
+              <option value="hash">Content (Exact Duplicates)</option>
+              <option value="name">Filename (Similar Names)</option>
+              <option value="size">File Size</option>
+            </select>
+          </label>
+          
+          <div className="stats">
+            <span className="stat">
+              {duplicates.length} duplicate group(s)
+            </span>
+            <span className="stat">
+              {duplicates.reduce((sum, g) => sum + g.files.length, 0)} total files
+            </span>
+          </div>
+        </div>
+
+        {selectedFiles.size > 0 && (
+          <div className="toolbar-right">
+            <span className="selection-info">
+              {selectedFiles.size} selected ({formatFileSize(totalSelectedSize)})
+            </span>
+            <button 
+              className="btn btn-danger" 
+              onClick={handleDeleteClick}
+            >
+              Delete Selected
+            </button>
+            <button 
+              className="btn btn-secondary" 
+              onClick={() => setSelectedFiles(new Set())}
+            >
+              Clear Selection
+            </button>
+          </div>
+        )}
+      </div>
+
+      {duplicates.length === 0 ? (
+        <div className="no-duplicates">
+          <svg width="80" height="80" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <h2>No Duplicates Found</h2>
+          <p>Your library is clean! No duplicate files detected.</p>
+        </div>
+      ) : (
+        <div className="duplicates-list">
+          {duplicates.map((group, idx) => (
+            <div key={idx} className="duplicate-group">
+              <div className="group-header">
+                <div className="group-info">
+                  <h3>{group.name}</h3>
+                  <span className="group-stats">
+                    {group.files.length} copies • {formatFileSize(group.totalSize)} total
+                    {group.reason && <span className="duplicate-reason"> • {group.reason}</span>}
+                  </span>
+                </div>
+                <div className="group-actions">
+                  <button
+                    className="btn btn-small btn-secondary"
+                    onClick={() => selectSuggestedInGroup(group)}
+                    title="Select duplicates (keeps oldest)"
+                  >
+                    Select Duplicates
+                  </button>
+                  <button
+                    className="btn btn-small btn-secondary"
+                    onClick={() => selectAllInGroup(group)}
+                  >
+                    Select All
+                  </button>
+                </div>
+              </div>
+
+              <div className="group-files">
+                {group.files.map((file, fileIdx) => (
+                  <div
+                    key={file.id}
+                    className={`duplicate-file ${selectedFiles.has(file.id) ? 'selected' : ''}`}
+                  >
+                    <div className="file-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={selectedFiles.has(file.id)}
+                        onChange={() => toggleFileSelection(file.id)}
+                      />
+                    </div>
+
+                    <div className="file-thumbnail-wrapper">
+                      <img
+                        src={`/api/library/thumbnail/${file.id}`}
+                        alt={file.originalName || file.fileName}
+                        className="file-thumbnail"
+                      />
+                    </div>
+
+                    <div className="file-details">
+                      <div className="file-name">{file.originalName || file.fileName}</div>
+                      <div className="file-meta">
+                        <span>{file.fileType?.toUpperCase()}</span>
+                        <span>{formatFileSize(file.fileSize)}</span>
+                        <span>ID: {file.id}</span>
+                        <span>{formatDate(file.createdAt)}</span>
+                      </div>
+                      {file.description && (
+                        <div className="file-description">{file.description}</div>
+                      )}
+                    </div>
+
+                    {fileIdx === 0 && (
+                      <div className="file-badge original">Original</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <ConfirmModal
+        isOpen={confirmDelete}
+        title="Confirm Deletion"
+        message={`Are you sure you want to delete ${selectedFiles.size} file(s)?\n\nThis action cannot be undone.`}
+        confirmText="Delete"
+        confirmButtonClass="btn-delete"
+        onConfirm={deleteSelectedFiles}
+        onCancel={() => setConfirmDelete(false)}
+      />
+    </div>
+  );
+}
+
+export default Duplicates;
