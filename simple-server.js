@@ -904,11 +904,30 @@ app.get('/api/check-auth', (req, res) => {
   console.log('Has token:', !!req.session.token);
   
   if (req.session.authenticated && req.session.userId) {
-    res.json({ 
-      authenticated: true, 
-      username: req.session.username,
-      role: req.session.role || 'user'
-    });
+    // Fetch current user role from database to ensure it's up to date
+    try {
+      const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
+      const currentRole = user ? user.role : (req.session.role || 'user');
+      
+      // Update session if role changed
+      if (user && req.session.role !== currentRole) {
+        req.session.role = currentRole;
+        console.log(`Updated session role to: ${currentRole}`);
+      }
+      
+      res.json({ 
+        authenticated: true, 
+        username: req.session.username,
+        role: currentRole
+      });
+    } catch (e) {
+      console.error('Error fetching user role:', e);
+      res.json({ 
+        authenticated: true, 
+        username: req.session.username,
+        role: req.session.role || 'user'
+      });
+    }
   } else {
     res.json({ authenticated: false });
   }

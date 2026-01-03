@@ -302,12 +302,17 @@ if (userCount.count === 0) {
 // Ensure admin user is always superadmin
 try {
   const adminUser = db.prepare('SELECT id, role FROM users WHERE username = ?').get('admin');
-  if (adminUser && adminUser.role !== 'superadmin') {
-    db.prepare('UPDATE users SET role = ? WHERE username = ?').run('superadmin', 'admin');
-    console.log('✓ Upgraded admin user to superadmin');
+  if (adminUser) {
+    console.log(`Current admin user role: ${adminUser.role}`);
+    if (adminUser.role !== 'superadmin') {
+      db.prepare('UPDATE users SET role = ? WHERE username = ?').run('superadmin', 'admin');
+      console.log('✓ Upgraded admin user to superadmin');
+    } else {
+      console.log('✓ Admin user already has superadmin role');
+    }
   }
 } catch (e) {
-  // Ignore if user doesn't exist
+  console.error('Error checking admin user:', e);
 }
 
 // Prepare statements
