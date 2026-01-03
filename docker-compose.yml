@@ -6,9 +6,9 @@ services:
     image: bambu-lab-integration:local
     container_name: bambu-lab-integration
     ports:
-      - "3000:3000"
+      - "${HOST_PORT:-3000}:${PORT:-3000}"
     environment:
-      - PORT=3000
+      - PORT=${PORT:-3000}
       - SESSION_SECRET=${SESSION_SECRET:-your-random-secret-key-change-this}
       - PUBLIC_URL=${PUBLIC_URL:-http://localhost:3000}
       - NODE_ENV=production

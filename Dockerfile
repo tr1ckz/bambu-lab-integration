@@ -55,12 +55,15 @@ RUN mkdir -p \
     /app/library \
     /app/sessions
 
+# Set default port (can be overridden with environment variable)
+ENV PORT=3000
+
 # Expose the application port
-EXPOSE 3000
+EXPOSE ${PORT}
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
+    CMD curl -f http://localhost:${PORT}/health || exit 1
 
 # Start the application
 CMD ["node", "simple-server.js"]

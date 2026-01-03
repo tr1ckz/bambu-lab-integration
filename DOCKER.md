@@ -9,6 +9,20 @@ docker pull ghcr.io/tr1ckz/bambu-lab-integration:latest
 docker run -d \
   --name bambu-lab \
   -p 3000:3000 \
+  -e PORT=3000 \
+  -v bambu_data:/app/data \
+  -v bambu_library:/app/library \
+  -v bambu_sessions:/app/sessions \
+  ghcr.io/tr1ckz/bambu-lab-integration:latest
+```
+
+**Custom Port Example:**
+```bash
+# Run on port 8080 instead
+docker run -d \
+  --name bambu-lab \
+  -p 8080:8080 \
+  -e PORT=8080 \
   -v bambu_data:/app/data \
   -v bambu_library:/app/library \
   -v bambu_sessions:/app/sessions \
@@ -18,7 +32,7 @@ docker run -d \
 ### Building Locally
 ```bash
 docker build -t bambu-lab-integration:latest .
-docker run -d --name bambu-lab -p 3000:3000 bambu-lab-integration:latest
+docker run -d --name bambu-lab -p 3000:3000 -e PORT=3000 bambu-lab-integration:latest
 ```
 
 ## Configuration
@@ -28,7 +42,18 @@ Create a `.env` file or set environment variables:
 BAMBU_HOST=192.168.1.100
 BAMBU_ACCESS_CODE=your_access_code
 BAMBU_SERIAL=your_serial_number
-PORT=3000
+PORT=3000                   # Change this to use a different port
+HOST_PORT=3000             # For docker-compose: host machine port
+```
+
+**Using docker-compose with custom port:**
+```bash
+# Create .env file
+echo "PORT=8080" > .env
+echo "HOST_PORT=8080" >> .env
+
+# Start with docker-compose
+docker-compose up -d
 ```
 
 ## Unraid Installation
@@ -45,9 +70,11 @@ PORT=3000
 - **WebUI**: `http://[IP]:[PORT:3000]`
 
 ### Step 3: Port Mapping
-| Container Port | Host Port | Type |
-|----------------|-----------|------|
-| 3000           | 3000      | TCP  |
+| Container Port | Host Port | Type | Note |
+|----------------|-----------|------|------|
+| 3000           | 3000      | TCP  | Change both if using custom PORT env |
+
+**For custom port:** Set the PORT environment variable and update both ports accordingly.
 
 ### Step 4: Path Mappings
 Add these volume mappings:
