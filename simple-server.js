@@ -364,7 +364,6 @@ app.get('/', (req, res) => {
   if (req.session.authenticated) {
     console.log('User already authenticated, serving app');
     // Check if dist exists, otherwise fall back to public
-    const fs = require('fs');
     const distExists = fs.existsSync(path.join(__dirname, 'dist', 'index.html'));
     const staticDir = distExists ? 'dist' : 'public';
     console.log('Serving from:', staticDir);
@@ -388,7 +387,6 @@ app.get('/', (req, res) => {
   
   // Default: serve login page
   console.log('Serving login page');
-  const fs = require('fs');
   const distExists = fs.existsSync(path.join(__dirname, 'dist', 'index.html'));
   const staticDir = distExists ? 'dist' : 'public';
   console.log('Serving from:', staticDir);
@@ -397,7 +395,6 @@ app.get('/', (req, res) => {
 
 // Admin route (prevents OAuth auto-redirect)
 app.get('/admin', (req, res) => {
-  const fs = require('fs');
   const distExists = fs.existsSync(path.join(__dirname, 'dist', 'index.html'));
   const staticDir = distExists ? 'dist' : 'public';
   res.sendFile(path.join(__dirname, staticDir, 'index.html'));
@@ -437,7 +434,6 @@ app.get('/images/covers/:modelId.:ext', async (req, res) => {
 });
 
 // Serve static files AFTER specific routes
-const fs = require('fs');
 const distExists = fs.existsSync(path.join(__dirname, 'dist', 'index.html'));
 const staticDir = distExists ? 'dist' : 'public';
 console.log('Serving static files from:', staticDir);

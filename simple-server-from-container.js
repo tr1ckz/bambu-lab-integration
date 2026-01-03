@@ -74,7 +74,6 @@ app.use(session({
 }));
 
 // Serve static files
-const fs = require('fs');
 const distExists = fs.existsSync(path.join(__dirname, 'dist', 'index.html'));
 const staticDir = distExists ? 'dist' : 'public';
 console.log('Serving static files from:', staticDir);
@@ -149,7 +148,6 @@ app.use((req, res, next) => {
 
 // Main route
 app.get('/', (req, res) => {
-  const fs = require('fs');
   const distExists = fs.existsSync(path.join(__dirname, 'dist', 'index.html'));
   const staticDir = distExists ? 'dist' : 'public';
   res.sendFile(path.join(__dirname, staticDir, 'index.html'));
