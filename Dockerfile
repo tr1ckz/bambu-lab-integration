@@ -20,9 +20,9 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Replace old canvas with @napi-rs/canvas which has prebuilt binaries
-# This avoids the compilation issues while keeping thumbnail functionality
-RUN npm pkg delete dependencies.canvas 2>/dev/null || true && \
+# Remove unused packages that require compilation (gl, old canvas)
+# Keep only @napi-rs/canvas which has prebuilt binaries
+RUN npm pkg delete dependencies.canvas dependencies.gl 2>/dev/null || true && \
     npm pkg set dependencies.@napi-rs/canvas="^0.1.53"
 
 # Install dependencies
