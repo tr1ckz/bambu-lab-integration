@@ -20,16 +20,13 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Remove canvas from dependencies entirely to prevent compilation
-RUN npm pkg delete \
-    dependencies.canvas \
-    dependencies.@napi-rs/canvas \
-    optionalDependencies.canvas \
-    optionalDependencies.@napi-rs/canvas \
-    2>/dev/null || true
+# Replace old canvas with @napi-rs/canvas which has prebuilt binaries
+# This avoids the compilation issues while keeping thumbnail functionality
+RUN npm pkg delete dependencies.canvas 2>/dev/null || true && \
+    npm pkg set dependencies.@napi-rs/canvas="^0.1.53"
 
-# Install all dependencies normally (this will install rollup's native bindings)
-# Remove canvas BEFORE install so it never gets added
+# Install dependencies
+# @napi-rs/canvas should install without compilation thanks to prebuilt binaries
 RUN rm -f package-lock.json && \
     npm install --omit=optional --legacy-peer-deps
 
@@ -39,12 +36,11 @@ COPY . .
 # Use container-specific server file
 RUN cp simple-server-from-container.js simple-server.js 2>/dev/null || echo "Using existing simple-server.js"
 
-# Build the application (now rollup binaries are installed)
+# Build the application
 RUN npm run build || echo "Build completed with warnings"
 
-# Remove dev dependencies and try to avoid canvas compilation
-# Use --ignore-scripts here to prevent canvas from trying to rebuild
-RUN npm prune --production --ignore-scripts 2>/dev/null || true
+# Clean up dev dependencies
+RUN npm prune --production 2>/dev/null || true
 
 # Create necessary directories
 RUN mkdir -p \

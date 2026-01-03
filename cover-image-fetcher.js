@@ -1,7 +1,7 @@
 const ftp = require('basic-ftp');
 const fs = require('fs');
 const path = require('path');
-const { createCanvas, loadImage } = require('canvas');
+const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const AdmZip = require('adm-zip');
 
 const CACHE_DIR = path.join(__dirname, 'data', 'cover-cache');
