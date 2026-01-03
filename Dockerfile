@@ -1,7 +1,7 @@
-# Use Node.js LTS version
+# Use Node.js LTS (Alpine)
 FROM node:20-alpine
 
-# Install build dependencies for native modules and curl for healthcheck
+# Install system dependencies including git for GitHub dependencies
 RUN apk add --no-cache \
     python3 \
     make \
@@ -20,41 +20,35 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Remove canvas packages completely - they fail to compile and aren't critical
-RUN npm pkg delete dependencies.canvas \
+# Remove canvas from dependencies entirely to prevent compilation
+RUN npm pkg delete \
+    dependencies.canvas \
     dependencies.@napi-rs/canvas \
     optionalDependencies.canvas \
-    optionalDependencies.@napi-rs/canvas 2>/dev/null || true
+    optionalDependencies.@napi-rs/canvas \
+    2>/dev/null || true
 
-# Set canvas as optional to prevent install errors
-RUN npm pkg set optionalDependencies.canvas="3.2.0" \
-    optionalDependencies.@napi-rs/canvas="0.1.83" 2>/dev/null || true
-
-# Clean install with strict peer deps disabled to avoid canvas issues
+# Install all dependencies normally (this will install rollup's native bindings)
+# Remove canvas BEFORE install so it never gets added
 RUN rm -f package-lock.json && \
-    npm install --omit=optional --legacy-peer-deps --ignore-scripts || \
-    npm install --omit=optional --force
+    npm install --omit=optional --legacy-peer-deps
 
-# Copy source files
+# Copy application files
 COPY . .
 
-# Use the container version of simple-server with all routes
+# Use container-specific server file
 RUN cp simple-server-from-container.js simple-server.js 2>/dev/null || echo "Using existing simple-server.js"
 
-# Build Vite frontend without canvas
-RUN npm run build 2>&1 || echo "Build completed with warnings"
+# Build the application (now rollup binaries are installed)
+RUN npm run build || echo "Build completed with warnings"
 
-# Remove dev dependencies after build
-RUN npm prune --production || true
+# Remove dev dependencies and try to avoid canvas compilation
+# Use --ignore-scripts here to prevent canvas from trying to rebuild
+RUN npm prune --production --ignore-scripts 2>/dev/null || true
 
-# Expose port
-EXPOSE 3000
-
-# Set environment variables
-ENV NODE_ENV=production
-
-# Create data directories
-RUN mkdir -p /app/data/thumbnails \
+# Create necessary directories
+RUN mkdir -p \
+    /app/data/thumbnails \
     /app/data/covers \
     /app/data/models \
     /app/data/videos \
@@ -62,9 +56,12 @@ RUN mkdir -p /app/data/thumbnails \
     /app/library \
     /app/sessions
 
+# Expose the application port
+EXPOSE 3000
+
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD curl -f http://localhost:3000/ || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
 
 # Start the application
 CMD ["node", "simple-server.js"]
