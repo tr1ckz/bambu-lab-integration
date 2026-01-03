@@ -47,14 +47,14 @@ docker-compose restart
 
 ### Quick One-Liner
 ```bash
-docker-compose exec bambu-web sqlite3 /app/data/bambu-lab.db "UPDATE users SET role = 'superadmin' WHERE username = 'admin'; SELECT username, role FROM users WHERE username = 'admin';"
+docker-compose exec bambu-web sqlite3 /app/data/bambu.db "UPDATE users SET role = 'superadmin' WHERE username = 'admin'; SELECT username, role FROM users WHERE username = 'admin';"
 ```
 
 ### Using the SQL File
 ```bash
 # Copy the SQL file to the container and execute it
 docker cp fix-admin.sql <container-name>:/tmp/fix-admin.sql
-docker-compose exec bambu-web sqlite3 /app/data/bambu-lab.db < /tmp/fix-admin.sql
+docker-compose exec bambu-web sqlite3 /app/data/bambu.db < /tmp/fix-admin.sql
 ```
 
 ## Method 4: Interactive Shell
@@ -64,7 +64,7 @@ docker-compose exec bambu-web sqlite3 /app/data/bambu-lab.db < /tmp/fix-admin.sq
 docker-compose exec bambu-web sh
 
 # Run SQLite
-sqlite3 /app/data/bambu-lab.db
+sqlite3 /app/data/bambu.db
 
 # In SQLite prompt, run:
 UPDATE users SET role = 'superadmin', password = 'admin' WHERE username = 'admin';

@@ -2,7 +2,7 @@
 # Reset Admin User Script
 # This script resets the admin user password and ensures superadmin role
 
-DB_PATH="/app/data/bambu-lab.db"
+DB_PATH="/app/data/bambu.db"
 
 echo "===================================="
 echo "Bambu Lab Admin Reset Script"

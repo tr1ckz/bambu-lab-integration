@@ -5,12 +5,12 @@
 Run this single command to fix the admin user in your Docker container:
 
 ```bash
-docker exec bambu-lab-integration sqlite3 /app/data/bambu-lab.db "UPDATE users SET role = 'superadmin', password = 'admin' WHERE username = 'admin'; SELECT username, role FROM users WHERE username = 'admin';"
+docker exec bambu-lab-integration sqlite3 /app/data/bambu.db "UPDATE users SET role = 'superadmin', password = 'admin' WHERE username = 'admin'; SELECT username, role FROM users WHERE username = 'admin';"
 ```
 
 **If using docker-compose:**
 ```bash
-docker-compose exec bambu-web sqlite3 /app/data/bambu-lab.db "UPDATE users SET role = 'superadmin', password = 'admin' WHERE username = 'admin'; SELECT username, role FROM users WHERE username = 'admin';"
+docker-compose exec bambu-web sqlite3 /app/data/bambu.db "UPDATE users SET role = 'superadmin', password = 'admin' WHERE username = 'admin'; SELECT username, role FROM users WHERE username = 'admin';"
 ```
 
 ### What this does:

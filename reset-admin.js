@@ -7,7 +7,7 @@
 const path = require('path');
 const fs = require('fs');
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'bambu-lab.db');
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'bambu.db');
 
 console.log('====================================');
 console.log('Bambu Lab Admin Reset Script');
