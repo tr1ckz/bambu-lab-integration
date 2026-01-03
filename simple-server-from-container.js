@@ -2092,6 +2092,19 @@ app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
   }
 });
 
+// SPA fallback - MUST be last, after all API routes
+// This handles client-side routing (e.g., /admin, /dashboard, etc.)
+app.get('*', (req, res) => {
+  // Skip if it's an API route
+  if (req.path.startsWith('/api/') || req.path.startsWith('/auth/') || req.path.startsWith('/data/')) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  
+  const distExists = fs.existsSync(path.join(__dirname, 'dist', 'index.html'));
+  const staticDir = distExists ? 'dist' : 'public';
+  res.sendFile(path.join(__dirname, staticDir, 'index.html'));
+});
+
 app.listen(PORT, async () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log('Database: SQLite (data/bambu.db)');
