@@ -34,6 +34,12 @@ RUN rm -f package-lock.json && \
 # Copy application files
 COPY . .
 
+# Verify logo files are present
+RUN echo "Checking for logo files..." && \
+    ls -la data/ && \
+    test -f data/logo.png && echo "✓ logo.png found" || echo "✗ logo.png missing" && \
+    test -f data/bmc-brand-logo.svg && echo "✓ bmc-brand-logo.svg found" || echo "✗ bmc-brand-logo.svg missing"
+
 # Build the application
 RUN npm run build && \
     ls -la dist/ && \
