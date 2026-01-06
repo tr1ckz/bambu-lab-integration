@@ -1708,23 +1708,19 @@ app.get('/api/timelapse/:modelId', async (req, res) => {
   console.log('=== TIMELAPSE REQUEST ===');
   console.log('Model ID:', req.params.modelId);
   
-  if (!req.session.authenticated) {
-    return res.status(401).json({ error: 'Not authenticated' });
-  }
-  
   try {
     const print = getPrintByModelIdFromDb(req.params.modelId);
     if (!print) {
       return res.status(404).json({ error: 'Print not found' });
     }
     
-    // Check if we have a local video file first
+    // Check if we have a local video file first (no auth required for local files)
     if (print.videoLocal) {
       const localVideoPath = path.join(videosDir, print.videoLocal);
       console.log('Checking for local video:', localVideoPath);
       
       if (fs.existsSync(localVideoPath)) {
-        console.log('Found local AVI, converting to MP4...');
+        console.log('Found local video, converting to MP4...');
         
         try {
           // Convert AVI to MP4 (or use existing MP4)
@@ -1766,6 +1762,11 @@ app.get('/api/timelapse/:modelId', async (req, res) => {
           return res.status(500).json({ error: 'Failed to convert video', details: conversionError.message });
         }
       }
+    }
+    
+    // Cloud videos require authentication
+    if (!req.session.authenticated) {
+      return res.status(401).json({ error: 'Not authenticated - cloud videos require login' });
     }
     
     // Fallback to fetching from Bambu API if no local video
@@ -2926,12 +2927,14 @@ app.get('/api/camera-snapshot', async (req, res) => {
   });
 
   let stderr = '';
+  let ffmpegTimeout;
   
   ffmpeg.stderr.on('data', (data) => {
     stderr += data.toString();
   });
 
   ffmpeg.on('close', (code) => {
+    clearTimeout(ffmpegTimeout);
     if (code === 0 && fs.existsSync(tempFile)) {
       console.log('FFmpeg snapshot captured successfully');
       
@@ -2984,6 +2987,7 @@ app.get('/api/camera-snapshot', async (req, res) => {
 
   ffmpeg.on('error', (err) => {
     console.error('FFmpeg spawn error:', err);
+    clearTimeout(ffmpegTimeout);
     if (!res.headersSent) {
       res.status(500).json({ 
         error: 'Failed to run ffmpeg',
@@ -2993,7 +2997,7 @@ app.get('/api/camera-snapshot', async (req, res) => {
   });
 
   // Timeout after 15 seconds
-  setTimeout(() => {
+  ffmpegTimeout = setTimeout(() => {
     if (!ffmpeg.killed) {
       ffmpeg.kill('SIGKILL');
       console.error('FFmpeg timeout - killed process');

@@ -264,6 +264,79 @@
 .maintenance-modal {
   max-width: 550px;
   width: 95%;
+  background: #1e1e2e;
+  border-radius: 16px;
+  padding: 0;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.maintenance-modal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.maintenance-modal .modal-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: white;
+}
+
+.maintenance-modal .modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.maintenance-modal .modal-close:hover {
+  color: white;
+}
+
+.maintenance-modal form {
+  padding: 1.5rem;
+}
+
+.maintenance-modal .form-group {
+  margin-bottom: 1.25rem;
+}
+
+.maintenance-modal .form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.maintenance-modal .form-group input,
+.maintenance-modal .form-group select {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: white;
+  padding: 0.75rem;
+  font-size: 1rem;
+}
+
+.maintenance-modal .form-group input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.maintenance-modal .form-group input:focus,
+.maintenance-modal .form-group select:focus {
+  outline: none;
+  border-color: var(--accent-color, #00a67d);
+}
+
+.maintenance-modal .form-group select option {
+  background: #1e1e2e;
+  color: white;
 }
 
 .maintenance-modal .form-row {
@@ -279,6 +352,15 @@
   color: rgba(255, 255, 255, 0.5);
 }
 
+.maintenance-modal .modal-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 1rem;
+}
+
 .maintenance-modal textarea {
   width: 100%;
   background: rgba(255, 255, 255, 0.05);
@@ -288,6 +370,10 @@
   padding: 0.75rem;
   font-family: inherit;
   resize: vertical;
+}
+
+.maintenance-modal textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .maintenance-modal textarea:focus {

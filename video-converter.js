@@ -6,15 +6,88 @@ const path = require('path');
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 /**
+ * Check if a file is still being written to (download in progress)
+ * @param {string} filePath - Path to the file
+ * @param {number} waitMs - Time to wait between size checks (default 2000ms)
+ * @returns {Promise<boolean>} - True if file is stable, false if still being written
+ */
+async function isFileStable(filePath, waitMs = 2000) {
+  if (!fs.existsSync(filePath)) {
+    return false;
+  }
+  
+  try {
+    const stat1 = fs.statSync(filePath);
+    const size1 = stat1.size;
+    const mtime1 = stat1.mtimeMs;
+    
+    // Wait and check again
+    await new Promise(resolve => setTimeout(resolve, waitMs));
+    
+    if (!fs.existsSync(filePath)) {
+      return false;
+    }
+    
+    const stat2 = fs.statSync(filePath);
+    const size2 = stat2.size;
+    const mtime2 = stat2.mtimeMs;
+    
+    // File is stable if size and mtime haven't changed
+    const stable = size1 === size2 && mtime1 === mtime2;
+    
+    if (!stable) {
+      console.log(`File still being written: ${path.basename(filePath)} (${size1} -> ${size2} bytes)`);
+    }
+    
+    return stable;
+  } catch (err) {
+    console.error(`Error checking file stability: ${err.message}`);
+    return false;
+  }
+}
+
+/**
+ * Wait for a file to finish downloading
+ * @param {string} filePath - Path to the file
+ * @param {number} maxWaitMs - Maximum time to wait (default 5 minutes)
+ * @param {number} checkIntervalMs - Time between checks (default 2 seconds)
+ * @returns {Promise<boolean>} - True if file is ready, false if timed out
+ */
+async function waitForFileReady(filePath, maxWaitMs = 300000, checkIntervalMs = 2000) {
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < maxWaitMs) {
+    if (await isFileStable(filePath, checkIntervalMs)) {
+      return true;
+    }
+    // Small additional delay between stability checks
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  
+  console.warn(`Timed out waiting for file to be ready: ${path.basename(filePath)}`);
+  return false;
+}
+
+/**
  * Convert AVI to MP4
  * @param {string} inputPath - Path to AVI file
  * @param {string} outputPath - Path to output MP4 file
  * @returns {Promise<string>} - Resolves with output path
  */
-function convertAviToMp4(inputPath, outputPath) {
+async function convertAviToMp4(inputPath, outputPath) {
+  console.log(`Converting ${path.basename(inputPath)} to MP4...`);
+  
+  // Wait for file to be fully downloaded before converting
+  console.log('  Checking if file is ready...');
+  const isReady = await waitForFileReady(inputPath, 300000, 2000);
+  
+  if (!isReady) {
+    throw new Error('File is still being written or timed out waiting');
+  }
+  
+  console.log('  File is ready, starting conversion...');
+  
   return new Promise((resolve, reject) => {
-    console.log(`Converting ${path.basename(inputPath)} to MP4...`);
-    
     ffmpeg(inputPath)
       .outputOptions([
         '-c:v libx264',      // H.264 video codec
@@ -55,16 +128,30 @@ function convertAviToMp4(inputPath, outputPath) {
 }
 
 /**
- * Get MP4 path for an AVI file (converts if needed)
- * @param {string} aviPath - Path to AVI file
+ * Get MP4 path for a video file (converts if needed)
+ * @param {string} videoPath - Path to video file (AVI or MP4)
  * @returns {Promise<string>} - Path to MP4 file
  */
-async function getMp4Path(aviPath) {
-  const mp4Path = aviPath.replace(/\.avi$/i, '.mp4');
+async function getMp4Path(videoPath) {
+  // If it's already an MP4, just return it
+  if (videoPath.toLowerCase().endsWith('.mp4')) {
+    if (fs.existsSync(videoPath)) {
+      return videoPath;
+    }
+    throw new Error(`MP4 file not found: ${videoPath}`);
+  }
   
-  // Check if MP4 already exists and is newer than AVI
+  const mp4Path = videoPath.replace(/\.avi$/i, '.mp4');
+  
+  // Check if MP4 already exists
   if (fs.existsSync(mp4Path)) {
-    const aviStat = fs.statSync(aviPath);
+    // If AVI no longer exists (deleted after conversion), just use the MP4
+    if (!fs.existsSync(videoPath)) {
+      return mp4Path;
+    }
+    
+    // Both exist - check if MP4 is up to date
+    const aviStat = fs.statSync(videoPath);
     const mp4Stat = fs.statSync(mp4Path);
     
     if (mp4Stat.mtime >= aviStat.mtime) {
@@ -73,8 +160,13 @@ async function getMp4Path(aviPath) {
     }
   }
   
+  // Need to convert - but only if AVI exists
+  if (!fs.existsSync(videoPath)) {
+    throw new Error(`Video file not found: ${videoPath}`);
+  }
+  
   // Convert AVI to MP4
-  await convertAviToMp4(aviPath, mp4Path);
+  await convertAviToMp4(videoPath, mp4Path);
   return mp4Path;
 }
 
@@ -122,5 +214,7 @@ async function convertAllInDirectory(dirPath) {
 module.exports = {
   convertAviToMp4,
   getMp4Path,
-  convertAllInDirectory
+  convertAllInDirectory,
+  isFileStable,
+  waitForFileReady
 };

@@ -89,8 +89,9 @@ function Maintenance() {
     try {
       const response = await fetch('/api/printers');
       const data = await response.json();
-      if (response.ok) {
-        setPrinters(data);
+      if (response.ok && data.devices) {
+        // Map device data to expected printer format
+        setPrinters(data.devices.map((d: any) => ({ id: d.dev_id, name: d.name })));
       }
     } catch (error) {
       console.error('Failed to load printers:', error);

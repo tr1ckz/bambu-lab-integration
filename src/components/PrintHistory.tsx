@@ -80,10 +80,23 @@ const PrintHistory: React.FC = () => {
     try {
       setMatching(true);
       const response = await fetch('/api/match-videos', { method: 'POST' });
-      if (!response.ok) throw new Error('Failed to match videos');
-      
       const data = await response.json();
-      setToast({ message: `Matched ${data.matched} videos to prints\n${data.unmatched} videos could not be matched\nTotal: ${data.total} videos`, type: 'success' });
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to match videos');
+      }
+      
+      // Show appropriate message based on results
+      if (data.matched > 0) {
+        setToast({ 
+          message: `✓ Matched ${data.matched} videos to prints\n${data.unmatched > 0 ? `${data.unmatched} videos had no matching prints` : ''}\nTotal processed: ${data.total}`, 
+          type: 'success' 
+        });
+      } else if (data.total === 0) {
+        setToast({ message: 'No video files found in data/videos', type: 'error' });
+      } else {
+        setToast({ message: `No matches found. ${data.unmatched} videos had no matching prints in the time window.`, type: 'error' });
+      }
       fetchPrints();
     } catch (err) {
       setToast({ message: 'Matching failed: ' + (err instanceof Error ? err.message : 'Unknown error'), type: 'error' });
