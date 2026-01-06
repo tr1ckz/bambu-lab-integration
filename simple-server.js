@@ -2816,6 +2816,28 @@ app.post('/api/settings/save-oauth', requireAdmin, async (req, res) => {
   }
 });
 
+// Admin: Restart/Reboot the application
+app.post('/api/settings/restart', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  // Check if user is admin
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
+  if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  console.log('=== RESTART REQUESTED BY ADMIN ===');
+  res.json({ success: true, message: 'Application will restart in 2 seconds...' });
+  
+  // Give time for response to be sent
+  setTimeout(() => {
+    console.log('Restarting application...');
+    process.exit(0); // Docker/PM2 will restart the process
+  }, 2000);
+});
+
 // ===========================
 // TAGGING ENDPOINTS
 // ===========================

@@ -47,6 +47,10 @@ function Settings() {
   const [hideBmc, setHideBmc] = useState(false);
   const [uiLoading, setUiLoading] = useState(false);
   
+  // System state
+  const [restarting, setRestarting] = useState(false);
+  const [confirmRestart, setConfirmRestart] = useState(false);
+  
   // Toast state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
@@ -136,6 +140,25 @@ function Settings() {
       setToast({ message: 'Failed to save UI settings', type: 'error' });
     } finally {
       setUiLoading(false);
+    }
+  };
+
+  const handleRestartApp = async () => {
+    setConfirmRestart(false);
+    setRestarting(true);
+    setToast({ message: 'Restarting application...', type: 'success' });
+    
+    try {
+      await fetch('/api/settings/restart', { method: 'POST' });
+      // The server will restart, so we'll lose connection
+      setTimeout(() => {
+        window.location.reload();
+      }, 3000);
+    } catch (error) {
+      // Expected - server is restarting
+      setTimeout(() => {
+        window.location.reload();
+      }, 3000);
     }
   };
 
@@ -778,6 +801,31 @@ function Settings() {
           {uiLoading ? 'Saving...' : 'Save UI Settings'}
         </button>
       </div>
+
+      {/* System Section */}
+      <div className="settings-section">
+        <h2>System</h2>
+        <p className="form-description">
+          Application management and maintenance
+        </p>
+        
+        <div className="system-actions">
+          <div className="system-action">
+            <div className="action-info">
+              <h3>Restart Application</h3>
+              <p>Restart the server to apply configuration changes or clear cached data</p>
+            </div>
+            <button 
+              type="button" 
+              className="btn btn-warning" 
+              onClick={() => setConfirmRestart(true)}
+              disabled={restarting}
+            >
+              {restarting ? 'Restarting...' : 'Restart App'}
+            </button>
+          </div>
+        </div>
+      </div>
       
       <ConfirmModal
         isOpen={confirmDisconnect}
@@ -787,6 +835,16 @@ function Settings() {
         confirmButtonClass="btn-delete"
         onConfirm={handleDisconnect}
         onCancel={() => setConfirmDisconnect(false)}
+      />
+
+      <ConfirmModal
+        isOpen={confirmRestart}
+        title="Restart Application"
+        message="Are you sure you want to restart the application? This will briefly disconnect all users."
+        confirmText="Restart"
+        confirmButtonClass="btn-warning"
+        onConfirm={handleRestartApp}
+        onCancel={() => setConfirmRestart(false)}
       />
 
       {toast && (

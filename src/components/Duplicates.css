@@ -11,6 +11,7 @@
   justify-content: center;
   min-height: 400px;
   gap: 1rem;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .duplicates-header {
@@ -21,14 +22,14 @@
   font-size: 2rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #00d4ff 0%, #0099ff 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .duplicates-description {
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.6);
   font-size: 1rem;
 }
 
@@ -37,11 +38,10 @@
   align-items: center;
   gap: 1rem;
   padding: 1rem 1.5rem;
-  background: linear-gradient(135deg, #fff4e6 0%, #ffe8cc 100%);
-  border: 2px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
   border-radius: 12px;
   margin-bottom: 1.5rem;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.15);
 }
 
 .caution-icon {
@@ -51,12 +51,12 @@
 
 .caution-content {
   flex: 1;
-  color: #92400e;
+  color: #fbbf24;
   line-height: 1.6;
 }
 
 .caution-content strong {
-  color: #78350f;
+  color: #fcd34d;
   font-weight: 600;
 }
 
@@ -69,14 +69,14 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.2s;
-  box-shadow: 0 2px 4px rgba(217, 119, 6, 0.2);
+  transition: all 0.25s ease;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3);
 }
 
 .caution-banner .btn-warning:hover {
   background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(217, 119, 6, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.4);
 }
 
 .caution-banner .btn-warning:active {
@@ -88,9 +88,9 @@
   justify-content: space-between;
   align-items: center;
   padding: 1rem;
-  background: white;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(0, 212, 255, 0.2);
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   margin-bottom: 2rem;
   flex-wrap: wrap;
   gap: 1rem;
@@ -108,27 +108,28 @@
   align-items: center;
   gap: 0.5rem;
   font-weight: 500;
-  color: #374151;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .group-select {
   padding: 0.5rem 1rem;
-  border: 1px solid #d1d5db;
+  border: 1px solid rgba(0, 212, 255, 0.2);
   border-radius: 8px;
   font-size: 0.95rem;
   cursor: pointer;
-  background: white;
+  background: rgba(15, 23, 42, 0.6);
+  color: #fff;
   transition: all 0.2s;
 }
 
 .group-select:hover {
-  border-color: #667eea;
+  border-color: #00d4ff;
 }
 
 .group-select:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: #00d4ff;
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
 }
 
 .stats {
@@ -138,7 +139,7 @@
 
 .stat {
   font-size: 0.9rem;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.6);
   font-weight: 500;
 }
 
@@ -150,7 +151,7 @@
 
 .selection-info {
   font-size: 0.9rem;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.6);
   font-weight: 600;
 }
 
@@ -161,9 +162,9 @@
   justify-content: center;
   padding: 4rem 2rem;
   text-align: center;
-  background: white;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(0, 212, 255, 0.2);
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .no-duplicates svg {
@@ -174,12 +175,12 @@
 .no-duplicates h2 {
   font-size: 1.5rem;
   font-weight: 600;
-  color: #111827;
+  color: #fff;
   margin-bottom: 0.5rem;
 }
 
 .no-duplicates p {
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .duplicates-list {
@@ -189,9 +190,9 @@
 }
 
 .duplicate-group {
-  background: white;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(0, 212, 255, 0.2);
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 }
 
@@ -200,20 +201,20 @@
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
-  border-bottom: 1px solid #e5e7eb;
+  background: rgba(15, 23, 42, 0.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .group-info h3 {
   font-size: 1.1rem;
   font-weight: 600;
-  color: #111827;
+  color: #fff;
   margin-bottom: 0.25rem;
 }
 
 .group-stats {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.6);
   font-weight: 500;
 }
 
@@ -234,20 +235,21 @@
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  border: 2px solid #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   transition: all 0.2s;
   position: relative;
+  background: rgba(15, 23, 42, 0.3);
 }
 
 .duplicate-file:hover {
-  border-color: #667eea;
-  background: #f9fafb;
+  border-color: rgba(0, 212, 255, 0.4);
+  background: rgba(15, 23, 42, 0.5);
 }
 
 .duplicate-file.selected {
-  border-color: #ef4444;
-  background: #fef2f2;
+  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .file-checkbox {
@@ -271,8 +273,8 @@
   height: 80px;
   object-fit: contain;
   border-radius: 6px;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .file-details {
@@ -282,7 +284,7 @@
 
 .file-name {
   font-weight: 600;
-  color: #111827;
+  color: #fff;
   margin-bottom: 0.5rem;
   word-break: break-word;
 }
@@ -291,7 +293,7 @@
   display: flex;
   gap: 1rem;
   font-size: 0.85rem;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.6);
   flex-wrap: wrap;
 }
 
@@ -303,7 +305,7 @@
 .file-description {
   margin-top: 0.5rem;
   font-size: 0.9rem;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.5);
   font-style: italic;
 }
 
@@ -316,8 +318,8 @@
 
 .tag {
   padding: 0.25rem 0.75rem;
-  background: #ede9fe;
-  color: #6d28d9;
+  background: rgba(0, 212, 255, 0.15);
+  color: #00d4ff;
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 500;
@@ -346,7 +348,7 @@
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.25s ease;
 }
 
 .btn-small {
@@ -360,20 +362,20 @@
 }
 
 .btn-danger:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
 .btn-secondary {
-  background: white;
-  color: #374151;
-  border: 1px solid #d1d5db;
+  background: rgba(51, 65, 85, 0.8);
+  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.3);
 }
 
 .btn-secondary:hover {
-  background: #f9fafb;
-  border-color: #667eea;
-  color: #667eea;
+  background: rgba(71, 85, 105, 0.9);
+  border-color: rgba(0, 212, 255, 0.4);
+  color: #fff;
 }
 
 @media (max-width: 768px) {
