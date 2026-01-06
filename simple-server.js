@@ -22,23 +22,34 @@ const {
 const { getThumbnail, clearThumbnailCache } = require('./thumbnail-generator');
 const { autoDescribeModel } = require('./ai-describer');
 
-// Helper function to clean HTML-encoded descriptions
+// Helper function to clean HTML-encoded descriptions (handles double/triple encoding)
 function cleanDescription(rawDescription) {
   if (!rawDescription || typeof rawDescription !== 'string') return rawDescription;
   
-  return rawDescription
-    // Decode common HTML entities
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    // Remove HTML tags
-    .replace(/<[^>]*>/g, '')
-    // Clean up whitespace
-    .replace(/\s+/g, ' ')
-    .trim();
+  let result = rawDescription;
+  let prevResult = '';
+  
+  // Keep decoding until no more changes (handles multiple encoding levels)
+  while (result !== prevResult) {
+    prevResult = result;
+    result = result
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#34;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;nbsp;/g, ' ');
+  }
+  
+  // Remove HTML tags
+  result = result.replace(/<[^>]*>/g, '');
+  
+  // Clean up whitespace
+  result = result.replace(/\s+/g, ' ').trim();
+  
+  return result;
 }
 const bambuFtp = require('./src/services/bambuFtp');
 const backgroundSync = require('./src/services/backgroundSync');
@@ -2503,6 +2514,84 @@ app.post('/api/library/clean-descriptions', async (req, res) => {
   } catch (error) {
     console.error('Clean descriptions error:', error);
     res.status(500).json({ error: 'Failed to clean descriptions' });
+  }
+});
+
+// Auto-tag all library files
+app.post('/api/library/auto-tag-all', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  try {
+    // Get all library items
+    const items = db.prepare('SELECT * FROM library').all();
+    
+    console.log(`=== AUTO-TAG ALL: Processing ${items.length} files ===`);
+    
+    let processed = 0;
+    let updated = 0;
+    let errors = 0;
+    
+    for (const file of items) {
+      try {
+        processed++;
+        console.log(`  [${processed}/${items.length}] Analyzing: ${file.originalName}`);
+        
+        // Run auto-analysis
+        const analysis = await autoDescribeModel(file.filePath, file.originalName);
+        
+        // Update description
+        if (analysis.description) {
+          db.prepare('UPDATE library SET description = ? WHERE id = ?').run(analysis.description, file.id);
+        }
+        
+        // Update tags - add to existing tags
+        if (analysis.tags && analysis.tags.length > 0) {
+          // Get existing tags for this file
+          const existingTags = db.prepare(`
+            SELECT t.name FROM tags t 
+            JOIN model_tags mt ON t.id = mt.tag_id 
+            WHERE mt.model_id = ?
+          `).all(file.id).map(t => t.name);
+          
+          // Add new tags that don't exist
+          for (const tagName of analysis.tags) {
+            if (existingTags.includes(tagName)) continue;
+            
+            // Insert or get tag
+            let tag = db.prepare('SELECT id FROM tags WHERE name = ?').get(tagName);
+            if (!tag) {
+              const result = db.prepare('INSERT INTO tags (name) VALUES (?)').run(tagName);
+              tag = { id: result.lastInsertRowid };
+            }
+            
+            // Link tag to model (ignore if already exists)
+            try {
+              db.prepare('INSERT OR IGNORE INTO model_tags (model_id, tag_id) VALUES (?, ?)').run(file.id, tag.id);
+            } catch (e) {}
+          }
+        }
+        
+        updated++;
+      } catch (err) {
+        console.error(`  Error processing ${file.originalName}:`, err.message);
+        errors++;
+      }
+    }
+    
+    console.log(`=== AUTO-TAG ALL COMPLETE: ${updated} updated, ${errors} errors ===`);
+    
+    res.json({ 
+      success: true, 
+      message: `Processed ${processed} files: ${updated} updated, ${errors} errors`,
+      processed,
+      updated,
+      errors
+    });
+  } catch (error) {
+    console.error('Auto-tag all error:', error);
+    res.status(500).json({ error: 'Failed to auto-tag all files' });
   }
 });
 

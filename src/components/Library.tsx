@@ -36,6 +36,7 @@ const Library: React.FC<LibraryProps> = ({ userRole }) => {
   const [editTags, setEditTags] = useState('');
   const [saving, setSaving] = useState(false);
   const [autoTagging, setAutoTagging] = useState(false);
+  const [autoTaggingAll, setAutoTaggingAll] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   
@@ -327,6 +328,34 @@ const Library: React.FC<LibraryProps> = ({ userRole }) => {
     }
   };
 
+  const handleAutoTagAll = async () => {
+    if (!confirm('This will auto-generate descriptions and tags for ALL files in your library. This may take a while. Continue?')) {
+      return;
+    }
+    
+    try {
+      setAutoTaggingAll(true);
+      setToast({ message: 'Auto-tagging all files... This may take a few minutes.', type: 'success' });
+      
+      const response = await fetch('/api/library/auto-tag-all', {
+        method: 'POST'
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setToast({ message: data.message, type: 'success' });
+        fetchFiles();
+      } else {
+        throw new Error(data.error || 'Failed to auto-tag');
+      }
+    } catch (err) {
+      setToast({ message: 'Auto-tag all failed: ' + (err instanceof Error ? err.message : 'Unknown error'), type: 'error' });
+    } finally {
+      setAutoTaggingAll(false);
+    }
+  };
+
   if (loading) {
     return <LoadingScreen message="Loading library..." />;
   }
@@ -478,9 +507,18 @@ const Library: React.FC<LibraryProps> = ({ userRole }) => {
           <h3>Auto-Import from Library Folder</h3>
           <div className="scan-info">
             <p>📂 Files in <code>/app/library</code> are automatically scanned</p>
-            <button onClick={handleScanFolder} disabled={scanning} className="btn-scan">
-              {scanning ? '⏳ Scanning...' : '🔄 Refresh Library'}
-            </button>
+            <div className="scan-buttons">
+              <button onClick={handleScanFolder} disabled={scanning} className="btn-scan">
+                {scanning ? '⏳ Scanning...' : '🔄 Refresh Library'}
+              </button>
+              <button 
+                onClick={handleAutoTagAll} 
+                disabled={autoTaggingAll || files.length === 0} 
+                className="btn-auto-tag"
+              >
+                {autoTaggingAll ? '⏳ Processing...' : '✨ Auto-Tag All Files'}
+              </button>
+            </div>
           </div>
           <p className="help-text">Mount your local folder to <code>/app/library</code> in Docker</p>
         </div>

@@ -110,6 +110,13 @@
   line-height: 1.6;
 }
 
+.scan-buttons {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
 .scan-info code {
   background: rgba(0, 0, 0, 0.4);
   padding: 0.25rem 0.5rem;

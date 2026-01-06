@@ -3,24 +3,36 @@ const path = require('path');
 const JSZip = require('jszip');
 
 /**
- * Clean and decode HTML-encoded text
+ * Clean and decode HTML-encoded text (handles double/triple encoding)
  */
 function cleanHTMLText(text) {
   if (!text || typeof text !== 'string') return text;
   
-  return text
-    // Decode common HTML entities
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    // Remove HTML tags
-    .replace(/<[^>]*>/g, '')
-    // Clean up whitespace
-    .replace(/\s+/g, ' ')
-    .trim();
+  let result = text;
+  let prevResult = '';
+  
+  // Keep decoding until no more changes (handles multiple encoding levels)
+  while (result !== prevResult) {
+    prevResult = result;
+    result = result
+      // Decode HTML entities (handle double-encoded like &amp;lt; -> &lt; -> <)
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#34;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;nbsp;/g, ' ');
+  }
+  
+  // Remove HTML tags
+  result = result.replace(/<[^>]*>/g, '');
+  
+  // Clean up whitespace
+  result = result.replace(/\s+/g, ' ').trim();
+  
+  return result;
 }
 
 /**
