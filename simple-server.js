@@ -2499,79 +2499,115 @@ app.get('/api/camera-snapshot', async (req, res) => {
     return res.status(400).json({ error: 'RTSP URL required' });
   }
 
-  try {
-    const ffmpeg = require('fluent-ffmpeg');
-    const path = require('path');
-    const fs = require('fs');
-    
-    // Try to use @ffmpeg-installer/ffmpeg, fallback to system ffmpeg
+  // If it's an HTTP URL (like a JPEG snapshot URL), fetch it directly
+  if (rtspUrl.startsWith('http://') || rtspUrl.startsWith('https://')) {
     try {
-      const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
-      ffmpeg.setFfmpegPath(ffmpegInstaller.path);
-      console.log('Using @ffmpeg-installer ffmpeg:', ffmpegInstaller.path);
-    } catch (e) {
-      console.log('Using system ffmpeg (fallback)');
-    }
-
-    console.log('Attempting to capture frame from RTSP:', rtspUrl.replace(/:[^:@]*@/, ':***@'));
-    
-    // Create a temporary file path
-    const tempFile = path.join(__dirname, 'data', `camera-temp-${Date.now()}.jpg`);
-    
-    // Use TCP transport which is more reliable in Docker/containerized environments
-    ffmpeg(rtspUrl)
-      .inputOptions([
-        '-rtsp_transport', 'tcp',
-        '-timeout', '10000000',
-        '-analyzeduration', '2000000',
-        '-probesize', '2000000',
-        '-stimeout', '5000000'
-      ])
-      .outputOptions([
-        '-vframes', '1',
-        '-q:v', '3'
-      ])
-      .output(tempFile)
-      .on('start', (commandLine) => {
-        console.log('FFmpeg command:', commandLine.replace(/:[^:@]*@/, ':***@'));
-      })
-      .on('end', () => {
-        console.log('FFmpeg snapshot captured successfully');
-        // Send the file
-        res.setHeader('Content-Type', 'image/jpeg');
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        
-        const stream = fs.createReadStream(tempFile);
-        stream.pipe(res);
-        stream.on('end', () => {
-          // Clean up temp file
-          fs.unlink(tempFile, (err) => {
-            if (err) console.error('Failed to delete temp file:', err);
-          });
-        });
-      })
-      .on('error', (err, stdout, stderr) => {
-        console.error('FFmpeg snapshot error:', err.message);
-        if (stderr) {
-          console.error('FFmpeg full stderr:', stderr);
+      console.log('Fetching HTTP camera image:', rtspUrl.replace(/:[^:@]*@/, ':***@'));
+      const response = await axios.get(rtspUrl, {
+        responseType: 'arraybuffer',
+        timeout: 10000,
+        headers: {
+          'Accept': 'image/jpeg, image/*'
         }
-        
-        // Clean up temp file if it exists
-        if (fs.existsSync(tempFile)) {
-          fs.unlinkSync(tempFile);
-        }
-        
-        if (!res.headersSent) {
-          res.status(500).send('Failed to capture camera snapshot: ' + err.message);
-        }
-      })
-      .run();
-  } catch (error) {
-    console.error('Camera snapshot error:', error);
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to capture snapshot', details: error.message });
+      });
+      
+      res.setHeader('Content-Type', response.headers['content-type'] || 'image/jpeg');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.send(Buffer.from(response.data));
+      return;
+    } catch (error) {
+      console.error('HTTP camera fetch error:', error.message);
+      return res.status(500).json({ error: 'Failed to fetch camera image', details: error.message });
     }
   }
+
+  // For RTSP streams, use ffmpeg via child_process for better control
+  const { spawn } = require('child_process');
+  const path = require('path');
+  const fs = require('fs');
+  
+  const tempFile = path.join(__dirname, 'data', `camera-temp-${Date.now()}.jpg`);
+  
+  console.log('Attempting RTSP snapshot:', rtspUrl.replace(/:[^:@]*@/, ':***@'));
+  
+  // Build ffmpeg command with robust options
+  const ffmpegArgs = [
+    '-y',                          // Overwrite output
+    '-rtsp_transport', 'tcp',      // Use TCP for RTSP (more reliable)
+    '-timeout', '10000000',        // Connection timeout in microseconds
+    '-stimeout', '10000000',       // Socket timeout
+    '-i', rtspUrl,                 // Input URL
+    '-vframes', '1',               // Capture 1 frame
+    '-q:v', '2',                   // JPEG quality (2=high, 31=low)
+    tempFile                       // Output file
+  ];
+
+  const ffmpeg = spawn('ffmpeg', ffmpegArgs, {
+    timeout: 15000,
+    stdio: ['pipe', 'pipe', 'pipe']
+  });
+
+  let stderr = '';
+  
+  ffmpeg.stderr.on('data', (data) => {
+    stderr += data.toString();
+  });
+
+  ffmpeg.on('close', (code) => {
+    if (code === 0 && fs.existsSync(tempFile)) {
+      console.log('FFmpeg snapshot captured successfully');
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      
+      const stream = fs.createReadStream(tempFile);
+      stream.pipe(res);
+      stream.on('end', () => {
+        fs.unlink(tempFile, (err) => {
+          if (err) console.error('Failed to delete temp file:', err);
+        });
+      });
+      stream.on('error', (err) => {
+        console.error('Stream error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Failed to read snapshot file' });
+        }
+      });
+    } else {
+      console.error('FFmpeg failed with code:', code);
+      console.error('FFmpeg stderr:', stderr);
+      
+      // Clean up temp file if it exists
+      if (fs.existsSync(tempFile)) {
+        fs.unlinkSync(tempFile);
+      }
+      
+      if (!res.headersSent) {
+        res.status(500).json({ 
+          error: 'Failed to capture camera snapshot',
+          details: `FFmpeg exit code: ${code}`,
+          stderr: stderr.slice(-500) // Last 500 chars of error
+        });
+      }
+    }
+  });
+
+  ffmpeg.on('error', (err) => {
+    console.error('FFmpeg spawn error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'Failed to run ffmpeg',
+        details: err.message 
+      });
+    }
+  });
+
+  // Timeout after 15 seconds
+  setTimeout(() => {
+    if (!ffmpeg.killed) {
+      ffmpeg.kill('SIGKILL');
+      console.error('FFmpeg timeout - killed process');
+    }
+  }, 15000);
 });
 
 // Generate thumbnails for all library files on startup
@@ -2837,6 +2873,157 @@ app.post('/api/settings/restart', async (req, res) => {
     process.exit(0); // Docker/PM2 will restart the process
   }, 2000);
 });
+
+// Health check endpoint for Docker/watchdog
+app.get('/api/health', (req, res) => {
+  try {
+    // Check database connectivity
+    const dbCheck = db.prepare('SELECT 1 as ok').get();
+    
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      database: dbCheck ? 'connected' : 'disconnected'
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(500).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      error: error.message
+    });
+  }
+});
+
+// Test ffmpeg installation
+app.get('/api/camera-test', async (req, res) => {
+  const { execSync } = require('child_process');
+  
+  try {
+    const version = execSync('ffmpeg -version', { encoding: 'utf8', timeout: 5000 });
+    const firstLine = version.split('\n')[0];
+    res.json({
+      success: true,
+      ffmpeg: firstLine,
+      path: execSync('which ffmpeg', { encoding: 'utf8', timeout: 5000 }).trim()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'ffmpeg not available',
+      details: error.message
+    });
+  }
+});
+
+// Get watchdog settings
+app.get('/api/settings/watchdog', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  try {
+    const getConfig = db.prepare('SELECT value FROM config WHERE key = ?');
+    const watchdogEnabled = getConfig.get('watchdog_enabled');
+    const watchdogInterval = getConfig.get('watchdog_interval');
+    const watchdogEndpoint = getConfig.get('watchdog_endpoint');
+    
+    res.json({
+      enabled: watchdogEnabled?.value === 'true',
+      interval: parseInt(watchdogInterval?.value || '30', 10),
+      endpoint: watchdogEndpoint?.value || ''
+    });
+  } catch (error) {
+    console.error('Error getting watchdog settings:', error);
+    res.status(500).json({ error: 'Failed to get watchdog settings' });
+  }
+});
+
+// Save watchdog settings
+app.post('/api/settings/watchdog', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  // Check if user is admin
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
+  if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  try {
+    const { enabled, interval, endpoint } = req.body;
+    
+    const upsert = db.prepare(`
+      INSERT INTO config (key, value) VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `);
+    
+    upsert.run('watchdog_enabled', enabled ? 'true' : 'false');
+    upsert.run('watchdog_interval', String(interval || 30));
+    upsert.run('watchdog_endpoint', endpoint || '');
+    
+    // Update the watchdog timer
+    setupWatchdog();
+    
+    res.json({ success: true, message: 'Watchdog settings saved!' });
+  } catch (error) {
+    console.error('Error saving watchdog settings:', error);
+    res.status(500).json({ error: 'Failed to save watchdog settings' });
+  }
+});
+
+// Watchdog interval reference
+let watchdogTimer = null;
+
+// Setup watchdog based on settings
+function setupWatchdog() {
+  // Clear existing timer
+  if (watchdogTimer) {
+    clearInterval(watchdogTimer);
+    watchdogTimer = null;
+  }
+  
+  try {
+    const getConfig = db.prepare('SELECT value FROM config WHERE key = ?');
+    const watchdogEnabled = getConfig.get('watchdog_enabled');
+    const watchdogInterval = getConfig.get('watchdog_interval');
+    const watchdogEndpoint = getConfig.get('watchdog_endpoint');
+    
+    const enabled = watchdogEnabled?.value === 'true';
+    const interval = parseInt(watchdogInterval?.value || '30', 10);
+    const endpoint = watchdogEndpoint?.value || '';
+    
+    if (!enabled) {
+      console.log('Watchdog disabled');
+      return;
+    }
+    
+    console.log(`Watchdog enabled: ping every ${interval} seconds${endpoint ? ` to ${endpoint}` : ' (internal)'}`);
+    
+    watchdogTimer = setInterval(async () => {
+      try {
+        if (endpoint) {
+          // External health check endpoint (e.g., uptime robot, healthchecks.io)
+          await axios.get(endpoint, { timeout: 10000 });
+          console.log(`Watchdog: Pinged ${endpoint}`);
+        } else {
+          // Internal self-check
+          const dbCheck = db.prepare('SELECT 1 as ok').get();
+          if (!dbCheck) {
+            console.error('Watchdog: Database check failed!');
+          }
+        }
+      } catch (error) {
+        console.error('Watchdog error:', error.message);
+      }
+    }, interval * 1000);
+  } catch (error) {
+    console.error('Failed to setup watchdog:', error);
+  }
+}
 
 // ===========================
 // TAGGING ENDPOINTS
@@ -3553,6 +3740,9 @@ app.listen(PORT, async () => {
   
   // Start background sync
   backgroundSync.start();
+  
+  // Initialize watchdog
+  setupWatchdog();
   
   // Auto-scan library on startup
   console.log('\n=== Scanning library directory ===');

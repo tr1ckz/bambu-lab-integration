@@ -47,6 +47,12 @@ function Settings() {
   const [hideBmc, setHideBmc] = useState(false);
   const [uiLoading, setUiLoading] = useState(false);
   
+  // Watchdog settings state
+  const [watchdogEnabled, setWatchdogEnabled] = useState(false);
+  const [watchdogInterval, setWatchdogInterval] = useState(30);
+  const [watchdogEndpoint, setWatchdogEndpoint] = useState('');
+  const [watchdogLoading, setWatchdogLoading] = useState(false);
+  
   // System state
   const [restarting, setRestarting] = useState(false);
   const [confirmRestart, setConfirmRestart] = useState(false);
@@ -60,6 +66,7 @@ function Settings() {
     loadPrinterSettings();
     loadOAuthSettings();
     loadUiSettings();
+    loadWatchdogSettings();
   }, []);
 
   useEffect(() => {
@@ -159,6 +166,44 @@ function Settings() {
       setTimeout(() => {
         window.location.reload();
       }, 3000);
+    }
+  };
+
+  const loadWatchdogSettings = async () => {
+    try {
+      const response = await fetch('/api/settings/watchdog');
+      const data = await response.json();
+      if (!response.ok) return;
+      setWatchdogEnabled(data.enabled || false);
+      setWatchdogInterval(data.interval || 30);
+      setWatchdogEndpoint(data.endpoint || '');
+    } catch (error) {
+      console.error('Failed to load watchdog settings:', error);
+    }
+  };
+
+  const handleSaveWatchdogSettings = async () => {
+    setWatchdogLoading(true);
+    try {
+      const response = await fetch('/api/settings/watchdog', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enabled: watchdogEnabled,
+          interval: watchdogInterval,
+          endpoint: watchdogEndpoint
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setToast({ message: 'Watchdog settings saved!', type: 'success' });
+      } else {
+        setToast({ message: 'Failed to save watchdog settings', type: 'error' });
+      }
+    } catch (error) {
+      setToast({ message: 'Failed to save watchdog settings', type: 'error' });
+    } finally {
+      setWatchdogLoading(false);
     }
   };
 
@@ -825,6 +870,67 @@ function Settings() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Watchdog Section */}
+      <div className="settings-section">
+        <h2>Watchdog / Health Check</h2>
+        <p className="form-description">
+          Keep the application alive and monitor health status
+        </p>
+        
+        <div className="toggle-group">
+          <label className="toggle-label">
+            <input
+              type="checkbox"
+              checked={watchdogEnabled}
+              onChange={(e) => setWatchdogEnabled(e.target.checked)}
+              disabled={watchdogLoading}
+            />
+            <span className="toggle-text">Enable Watchdog</span>
+          </label>
+          <p className="toggle-hint">Periodically check application health and ping external services</p>
+        </div>
+        
+        {watchdogEnabled && (
+          <>
+            <div className="form-group">
+              <label>Check Interval (seconds)</label>
+              <input
+                type="number"
+                value={watchdogInterval}
+                onChange={(e) => setWatchdogInterval(parseInt(e.target.value) || 30)}
+                placeholder="30"
+                min="10"
+                max="3600"
+                disabled={watchdogLoading}
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>External Ping URL (optional)</label>
+              <input
+                type="url"
+                value={watchdogEndpoint}
+                onChange={(e) => setWatchdogEndpoint(e.target.value)}
+                placeholder="https://healthchecks.io/ping/your-uuid"
+                disabled={watchdogLoading}
+              />
+              <small style={{ color: 'rgba(255,255,255,0.5)', display: 'block', marginTop: '0.5rem' }}>
+                Optional: URL to ping for external monitoring (Uptime Robot, Healthchecks.io, etc.)
+              </small>
+            </div>
+          </>
+        )}
+        
+        <button 
+          type="button" 
+          className="btn btn-primary" 
+          onClick={handleSaveWatchdogSettings}
+          disabled={watchdogLoading}
+        >
+          {watchdogLoading ? 'Saving...' : 'Save Watchdog Settings'}
+        </button>
       </div>
       
       <ConfirmModal
