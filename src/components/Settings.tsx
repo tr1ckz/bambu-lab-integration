@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import './Settings.css';
 import Toast from './Toast';
 import ConfirmModal from './ConfirmModal';
+import UserManagement from './UserManagement';
 
 interface BambuStatus {
   connected: boolean;
@@ -10,7 +11,12 @@ interface BambuStatus {
   lastUpdated: string | null;
 }
 
-function Settings() {
+interface SettingsProps {
+  userRole?: string;
+}
+
+function Settings({ userRole }: SettingsProps) {
+  const isAdmin = userRole === 'admin' || userRole === 'superadmin';
   const [bambuStatus, setBambuStatus] = useState<BambuStatus | null>(null);
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -1159,6 +1165,17 @@ function Settings() {
           {watchdogLoading ? 'Saving...' : 'Save Watchdog Settings'}
         </button>
       </div>
+
+      {/* User Management Section - Admin Only */}
+      {isAdmin && (
+        <div className="settings-section">
+          <h2>User Management</h2>
+          <p className="form-description">
+            Manage user accounts and permissions
+          </p>
+          <UserManagement />
+        </div>
+      )}
       
       <ConfirmModal
         isOpen={confirmDisconnect}

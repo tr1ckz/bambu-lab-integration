@@ -1,11 +1,8 @@
 import { useState, useEffect } from 'react';
-import Printers from './Printers';
 import PrintHistory from './PrintHistory';
-import Statistics from './Statistics';
 import Library from './Library';
 import Duplicates from './Duplicates';
 import Settings from './Settings';
-import UserManagement from './UserManagement';
 import BuyMeACoffee from './BuyMeACoffee';
 import DashboardHome from './DashboardHome';
 import Maintenance from './Maintenance';
@@ -15,7 +12,7 @@ interface DashboardProps {
   onLogout: () => void;
 }
 
-type Tab = 'home' | 'printers' | 'history' | 'statistics' | 'library' | 'duplicates' | 'maintenance' | 'settings' | 'users';
+type Tab = 'home' | 'history' | 'library' | 'duplicates' | 'maintenance' | 'settings';
 
 interface UserInfo {
   username: string;
@@ -82,20 +79,9 @@ function Dashboard({ onLogout }: DashboardProps) {
         <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     )},
-    { id: 'printers' as Tab, label: 'Printers', icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="4" y="4" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="2" />
-        <path d="M8 20h8M12 16v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      </svg>
-    )},
     { id: 'history' as Tab, label: 'History', icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-    )},
-    { id: 'statistics' as Tab, label: 'Stats', icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M9 11v6m6-8v8m-9-6v4m12-8v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     )},
     { id: 'library' as Tab, label: 'Library', icon: (
@@ -113,14 +99,6 @@ function Dashboard({ onLogout }: DashboardProps) {
         <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     )},
-  ];
-
-  const adminItems = [
-    { id: 'users' as Tab, label: 'Users', icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-    )},
     { id: 'settings' as Tab, label: 'Settings', icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -128,6 +106,8 @@ function Dashboard({ onLogout }: DashboardProps) {
       </svg>
     )},
   ];
+
+  const adminItems: { id: Tab; label: string; icon: JSX.Element }[] = [];
 
   return (
     <div className="dashboard">
@@ -230,14 +210,11 @@ function Dashboard({ onLogout }: DashboardProps) {
       <main className="dashboard-content">
         <div className="content-wrapper">
           {activeTab === 'home' && <DashboardHome onNavigate={(tab) => handleTabChange(tab as Tab)} />}
-          {activeTab === 'printers' && <Printers />}
           {activeTab === 'history' && <PrintHistory />}
-          {activeTab === 'statistics' && <Statistics />}
           {activeTab === 'library' && <Library userRole={userInfo?.role} />}
           {activeTab === 'duplicates' && <Duplicates />}
           {activeTab === 'maintenance' && <Maintenance />}
-          {isAdmin && activeTab === 'users' && <UserManagement />}
-          {isAdmin && activeTab === 'settings' && <Settings />}
+          {activeTab === 'settings' && <Settings userRole={userInfo?.role} />}
         </div>
       </main>
     </div>

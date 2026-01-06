@@ -1318,6 +1318,67 @@ app.get('/api/printers', async (req, res) => {
   }
 });
 
+// Simple printer status for dashboard
+app.get('/api/printers/status', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  try {
+    const response = await axios.get('https://api.bambulab.com/v1/iot-service/api/user/bind', {
+      headers: { 'Authorization': `Bearer ${req.session.token}` }
+    });
+    
+    const devices = response.data?.devices || [];
+    const printers = devices.map(device => ({
+      id: device.dev_id,
+      name: device.name || 'Printer',
+      model: device.dev_product_name || 'Unknown',
+      status: device.print_status || 'IDLE',
+      progress: device.print_progress || 0,
+      online: device.online || false,
+      currentPrint: device.current_task?.name || null,
+      nozzleTemp: device.nozzle_temper || 0,
+      bedTemp: device.bed_temper || 0
+    }));
+    
+    const online = printers.filter(p => p.online).length;
+    
+    res.json({
+      printers,
+      online,
+      total: printers.length
+    });
+  } catch (error) {
+    console.error('Printer status error:', error.message);
+    // Return empty printers on error instead of 500
+    res.json({ printers: [], online: 0, total: 0 });
+  }
+});
+
+// Get recent prints for dashboard
+app.get('/api/prints', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  const limit = parseInt(req.query.limit) || 50;
+  
+  try {
+    const prints = db.prepare(`
+      SELECT id, title, cover, status, startTime, deviceName, weight, costTime, progress
+      FROM prints 
+      ORDER BY startTime DESC 
+      LIMIT ?
+    `).all(limit);
+    
+    res.json(prints);
+  } catch (error) {
+    console.error('Prints error:', error.message);
+    res.json([]);
+  }
+});
+
 // Get cover image for current print job
 app.get('/api/job-cover/:dev_id', async (req, res) => {
   const { dev_id } = req.params;
@@ -2500,6 +2561,10 @@ app.put('/api/library/:id/tags', async (req, res) => {
 
 // Auto-tag endpoint - analyzes file and suggests description/tags
 app.post('/api/library/:id/auto-tag', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
   try {
     const fileId = parseInt(req.params.id);
     console.log(`=== AUTO-TAG REQUEST for file ${fileId} ===`);

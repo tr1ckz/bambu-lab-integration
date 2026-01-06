@@ -121,14 +121,9 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ onNavigate }) => {
 
   return (
     <div className="dashboard-home">
-      <div className="dashboard-header">
-        <h1>Welcome to PrintHive 🐝</h1>
-        <p>Your 3D printing command center</p>
-      </div>
-
       {/* Quick Stats Row */}
       <div className="stats-row">
-        <div className="stat-card" onClick={() => onNavigate('printers')}>
+        <div className="stat-card">
           <div className="stat-icon">🖨️</div>
           <div className="stat-content">
             <span className="stat-value">{printers.filter(p => p.online).length}/{printers.length}</span>
@@ -144,7 +139,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ onNavigate }) => {
           </div>
         </div>
         
-        <div className="stat-card" onClick={() => onNavigate('statistics')}>
+        <div className="stat-card">
           <div className="stat-icon">✅</div>
           <div className="stat-content">
             <span className="stat-value">{stats?.successRate?.toFixed(0) || 0}%</span>
@@ -167,17 +162,16 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ onNavigate }) => {
         <div className="widget printers-widget">
           <div className="widget-header">
             <h3>🖨️ Printers</h3>
-            <button className="widget-action" onClick={() => onNavigate('printers')}>View All →</button>
           </div>
           <div className="widget-content">
             {printers.length === 0 ? (
               <div className="widget-empty">
                 <p>No printers configured</p>
-                <button onClick={() => onNavigate('settings')}>Add Printer</button>
+                <button onClick={() => onNavigate('settings')}>Configure Printer</button>
               </div>
             ) : (
               <div className="printers-list">
-                {printers.slice(0, 4).map(printer => (
+                {printers.map(printer => (
                   <div key={printer.id} className={`printer-item ${printer.online ? 'online' : 'offline'}`}>
                     <div className="printer-status-dot"></div>
                     <div className="printer-info">
@@ -242,7 +236,6 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ onNavigate }) => {
         <div className="widget quick-stats-widget">
           <div className="widget-header">
             <h3>📈 Statistics</h3>
-            <button className="widget-action" onClick={() => onNavigate('statistics')}>View All →</button>
           </div>
           <div className="widget-content">
             <div className="quick-stats-grid">
@@ -283,9 +276,9 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ onNavigate }) => {
                 <span className="action-icon">🔍</span>
                 <span>Find Duplicates</span>
               </button>
-              <button className="quick-action" onClick={() => onNavigate('statistics')}>
-                <span className="action-icon">📊</span>
-                <span>View Stats</span>
+              <button className="quick-action" onClick={() => onNavigate('maintenance')}>
+                <span className="action-icon">🔧</span>
+                <span>Maintenance</span>
               </button>
             </div>
           </div>
