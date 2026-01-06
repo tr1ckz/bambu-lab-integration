@@ -342,7 +342,7 @@ function Maintenance() {
                     {printer && <span className="meta-item">🖨️ {printer.name}</span>}
                     <span className="meta-item">🔄 Every {formatHours(task.interval_hours)}</span>
                     <span className="meta-item">📅 Last: {formatDate(task.last_performed)}</span>
-                    {task.hours_until_due !== null && (
+                    {task.hours_until_due !== null && task.hours_until_due !== undefined && !isNaN(task.hours_until_due) && (
                       <span className="meta-item">
                         ⏳ {task.hours_until_due > 0 
                           ? `${Math.round(task.hours_until_due)} print hrs left` 

@@ -2710,6 +2710,29 @@ app.post('/api/library/:id/auto-tag', async (req, res) => {
     }
     
     if (!actualFilePath) {
+      // Try to find by ID prefix (handles Unicode filename issues)
+      const fileIdPrefix = file.fileName.split('-')[0]; // Get the timestamp prefix
+      console.log(`  Searching by ID prefix: ${fileIdPrefix}`);
+      
+      const searchDirs = [libraryDir, path.join(__dirname, 'library'), '/app/library'];
+      for (const dir of searchDirs) {
+        if (fs.existsSync(dir)) {
+          try {
+            const files = fs.readdirSync(dir);
+            const matchingFile = files.find(f => f.startsWith(fileIdPrefix));
+            if (matchingFile) {
+              actualFilePath = path.join(dir, matchingFile);
+              console.log(`  ✓ Found file by prefix: ${actualFilePath}`);
+              break;
+            }
+          } catch (err) {
+            console.log(`  Could not read dir ${dir}: ${err.message}`);
+          }
+        }
+      }
+    }
+    
+    if (!actualFilePath) {
       console.log(`  ERROR: File not found in any location`);
       console.log(`  Tried: ${possiblePaths.join(', ')}`);
       return res.status(404).json({ error: 'File not found on disk', triedPaths: possiblePaths });
