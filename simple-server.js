@@ -1979,6 +1979,31 @@ app.post('/api/sync-printer-timelapses', async (req, res) => {
   }
 
   try {
+    // Check if printer is idle before downloading
+    // Get printer status from Bambu API
+    try {
+      const printersResponse = await axios.get('https://api.bambulab.com/v1/iot-service/api/user/bind', {
+        headers: { 'Authorization': `Bearer ${req.session.token}` }
+      });
+      
+      if (printersResponse.data && printersResponse.data.devices) {
+        const activePrinter = printersResponse.data.devices.find(d => 
+          d.print_status === 'RUNNING' || d.print_status === 'PRINTING'
+        );
+        
+        if (activePrinter) {
+          return res.status(400).json({ 
+            error: 'Printer is currently printing',
+            details: `Cannot download timelapses while printer "${activePrinter.name}" is printing. Please wait until the print is complete.`,
+            printerStatus: activePrinter.print_status
+          });
+        }
+      }
+    } catch (statusErr) {
+      console.log('Could not check printer status:', statusErr.message);
+      // Continue anyway if we can't check status
+    }
+
     // Connect to printer
     console.log(`Connecting to printer at ${printerIp}...`);
     const connected = await bambuFtp.connect(printerIp, accessCode);
