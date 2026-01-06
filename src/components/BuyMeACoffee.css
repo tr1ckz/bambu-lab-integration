@@ -3,11 +3,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 12px;
-  width: 100%;
+  padding: 5px 8px;
+  width: 60%;
   background: linear-gradient(135deg, #FFDD00 0%, #FDB813 100%);
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 2px 8px rgba(255, 221, 0, 0.2);
@@ -21,7 +21,7 @@
 .bmc-button .bmc-logo {
   width: 100%;
   height: auto;
-  max-height: 40px;
+  max-height: 24px;
   object-fit: contain;
 }
 
