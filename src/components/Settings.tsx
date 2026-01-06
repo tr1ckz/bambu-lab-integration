@@ -52,6 +52,23 @@ function Settings({ userRole }: SettingsProps) {
   const [codeSent, setCodeSent] = useState(false);
   const [countdown, setCountdown] = useState(0);
   
+  // Track which category sections are expanded
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
+    printer: true,
+    account: false,
+    preferences: false,
+    integrations: false,
+    advanced: false,
+    administration: false
+  });
+  
+  const toggleCategory = (category: string) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [category]: !prev[category]
+    }));
+  };
+  
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -624,11 +641,17 @@ function Settings({ userRole }: SettingsProps) {
 
       {/* PRINTER CONNECTION */}
       <div className="settings-category">
-        <div className="category-header">
+        <div 
+          className={`category-header category-collapsible ${expandedCategories.printer ? 'expanded' : ''}`}
+          onClick={() => toggleCategory('printer')}
+        >
           <span className="category-icon">🖨️</span>
           <h2>Printer Connection</h2>
+          <span className="category-toggle-icon">{expandedCategories.printer ? '−' : '+'}</span>
         </div>
 
+        {expandedCategories.printer && (
+          <>
         <CollapsibleSection title="Bambu Lab Account" icon="🔗" defaultExpanded={!bambuStatus?.connected}>
         
         {bambuStatus?.connected ? (
@@ -808,14 +831,23 @@ function Settings({ userRole }: SettingsProps) {
           </div>
         </form>
         </CollapsibleSection>
+          </>
+        )}
       </div>
 
       {/* ACCOUNT */}
       <div className="settings-category">
-        <div className="category-header">
+        <div 
+          className={`category-header category-collapsible ${expandedCategories.account ? 'expanded' : ''}`}
+          onClick={() => toggleCategory('account')}
+        >
           <span className="category-icon">👤</span>
           <h2>Account</h2>
+          <span className="category-toggle-icon">{expandedCategories.account ? '−' : '+'}</span>
         </div>
+
+        {expandedCategories.account && (
+          <>
 
       {/* User Profile Section - moved here */}
       <CollapsibleSection title="User Profile" icon="📝">
@@ -925,14 +957,23 @@ function Settings({ userRole }: SettingsProps) {
           </button>
         </form>
         </CollapsibleSection>
+          </>
+        )}
       </div>
 
       {/* PREFERENCES */}
       <div className="settings-category">
-        <div className="category-header">
+        <div 
+          className={`category-header category-collapsible ${expandedCategories.preferences ? 'expanded' : ''}`}
+          onClick={() => toggleCategory('preferences')}
+        >
           <span className="category-icon">🎨</span>
           <h2>Preferences</h2>
+          <span className="category-toggle-icon">{expandedCategories.preferences ? '−' : '+'}</span>
         </div>
+
+        {expandedCategories.preferences && (
+          <>
 
       {/* Cost Calculator */}
       <CollapsibleSection title="Cost Calculator" icon="💰">
@@ -1038,14 +1079,23 @@ function Settings({ userRole }: SettingsProps) {
           {uiLoading ? 'Saving...' : 'Save UI Settings'}
         </button>
         </CollapsibleSection>
+          </>
+        )}
       </div>
 
       {/* INTEGRATIONS */}
       <div className="settings-category">
-        <div className="category-header">
+        <div 
+          className={`category-header category-collapsible ${expandedCategories.integrations ? 'expanded' : ''}`}
+          onClick={() => toggleCategory('integrations')}
+        >
           <span className="category-icon">🔌</span>
           <h2>Integrations</h2>
+          <span className="category-toggle-icon">{expandedCategories.integrations ? '−' : '+'}</span>
         </div>
+
+        {expandedCategories.integrations && (
+          <>
 
       {/* Discord Webhooks Section */}
       <CollapsibleSection title="Discord Webhooks" icon="💬">
@@ -1160,14 +1210,23 @@ function Settings({ userRole }: SettingsProps) {
           {discordLoading ? 'Saving...' : 'Save Discord Settings'}
         </button>
         </CollapsibleSection>
+          </>
+        )}
       </div>
 
       {/* ADVANCED */}
       <div className="settings-category">
-        <div className="category-header">
+        <div 
+          className={`category-header category-collapsible ${expandedCategories.advanced ? 'expanded' : ''}`}
+          onClick={() => toggleCategory('advanced')}
+        >
           <span className="category-icon">⚡</span>
           <h2>Advanced</h2>
+          <span className="category-toggle-icon">{expandedCategories.advanced ? '−' : '+'}</span>
         </div>
+
+        {expandedCategories.advanced && (
+          <>
 
       <CollapsibleSection title="OAuth / SSO Authentication" icon="🔑">
         <form onSubmit={handleSaveOAuthSettings} className="oauth-form">
@@ -1409,22 +1468,32 @@ function Settings({ userRole }: SettingsProps) {
           </div>
         </div>
         </CollapsibleSection>
+          </>
+        )}
       </div>
 
       {/* ADMIN */}
       {isAdmin && (
         <div className="settings-category">
-          <div className="category-header">
+          <div 
+            className={`category-header category-collapsible ${expandedCategories.administration ? 'expanded' : ''}`}
+            onClick={() => toggleCategory('administration')}
+          >
             <span className="category-icon">🔐</span>
             <h2>Administration</h2>
+            <span className="category-toggle-icon">{expandedCategories.administration ? '−' : '+'}</span>
           </div>
 
+          {expandedCategories.administration && (
+            <>
           <CollapsibleSection title="User Management" icon="👥" defaultExpanded={true}>
             <p className="form-description">
               Manage user accounts and permissions
             </p>
             <UserManagement />
             </CollapsibleSection>
+            </>
+          )}
         </div>
       )}
       
