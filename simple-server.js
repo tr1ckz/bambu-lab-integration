@@ -2530,12 +2530,11 @@ app.get('/api/camera-snapshot', async (req, res) => {
   
   console.log('Attempting RTSP snapshot:', rtspUrl.replace(/:[^:@]*@/, ':***@'));
   
-  // Build ffmpeg command with robust options
+  // Build ffmpeg command with robust options for ffmpeg 8.x
   const ffmpegArgs = [
     '-y',                          // Overwrite output
     '-rtsp_transport', 'tcp',      // Use TCP for RTSP (more reliable)
     '-timeout', '10000000',        // Connection timeout in microseconds
-    '-stimeout', '10000000',       // Socket timeout
     '-i', rtspUrl,                 // Input URL
     '-vframes', '1',               // Capture 1 frame
     '-q:v', '2',                   // JPEG quality (2=high, 31=low)
