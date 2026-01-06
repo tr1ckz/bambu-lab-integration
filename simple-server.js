@@ -2688,15 +2688,31 @@ app.post('/api/library/:id/auto-tag', async (req, res) => {
     }
     
     console.log(`  Analyzing: ${file.originalName}`);
+    console.log(`  Stored filePath: ${file.filePath}`);
+    console.log(`  Stored fileName: ${file.fileName}`);
     
-    // Use the stored filePath which should be the full path
-    const actualFilePath = file.filePath;
-    console.log(`  File path: ${actualFilePath}`);
+    // Try multiple possible file paths
+    let actualFilePath = null;
+    const possiblePaths = [
+      file.filePath, // Original stored path
+      path.join(libraryDir, file.fileName), // library dir + fileName
+      path.join(__dirname, 'library', file.fileName), // relative to server
+      `/app/library/${file.fileName}` // Docker path
+    ];
     
-    // Check if file exists
-    if (!fs.existsSync(actualFilePath)) {
-      console.log(`  ERROR: File not found at ${actualFilePath}`);
-      return res.status(404).json({ error: 'File not found on disk' });
+    for (const testPath of possiblePaths) {
+      console.log(`  Trying path: ${testPath}`);
+      if (fs.existsSync(testPath)) {
+        actualFilePath = testPath;
+        console.log(`  ✓ Found file at: ${actualFilePath}`);
+        break;
+      }
+    }
+    
+    if (!actualFilePath) {
+      console.log(`  ERROR: File not found in any location`);
+      console.log(`  Tried: ${possiblePaths.join(', ')}`);
+      return res.status(404).json({ error: 'File not found on disk', triedPaths: possiblePaths });
     }
     
     // Run auto-analysis
@@ -3466,7 +3482,7 @@ app.get('/api/maintenance', async (req, res) => {
       
       if (task.hours_until_due) {
         isOverdue = currentPrintHours >= task.hours_until_due;
-        isDueSoon = !isOverdue && (task.hours_until_due - currentPrintHours <= 50);
+        isDueSoon = !isOverdue && (task.hours_until_due - currentPrintHours <= 10);
       } else if (task.next_due) {
         // Fallback to time-based if hours_until_due not set
         const now = new Date().toISOString();

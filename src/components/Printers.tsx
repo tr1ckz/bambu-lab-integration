@@ -84,10 +84,10 @@ function Printers() {
               {printer.camera_rtsp_url && (
                 <div className="printer-camera">
                   <img
-                    key={cameraRefresh}
                     src={`/api/camera-snapshot?url=${encodeURIComponent(printer.camera_rtsp_url)}&t=${cameraRefresh}`}
                     alt="Camera feed"
                     className="camera-feed"
+                    style={{ transition: 'none' }}
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
                       target.style.display = 'none';

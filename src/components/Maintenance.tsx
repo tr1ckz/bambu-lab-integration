@@ -342,11 +342,12 @@ function Maintenance() {
                     {printer && <span className="meta-item">🖨️ {printer.name}</span>}
                     <span className="meta-item">🔄 Every {formatHours(task.interval_hours)}</span>
                     <span className="meta-item">📅 Last: {formatDate(task.last_performed)}</span>
-                    {!isOverdue && !isDueSoon && task.hours_until_due !== null && task.hours_until_due > 0 && (
-                      <span className="meta-item">⏳ {Math.round(task.hours_until_due)}h left</span>
-                    )}
-                    {!isOverdue && !isDueSoon && task.next_due && task.hours_until_due === null && (
-                      <span className="meta-item">⏳ Next: {formatDate(task.next_due)}</span>
+                    {task.hours_until_due !== null && (
+                      <span className="meta-item">
+                        ⏳ {task.hours_until_due > 0 
+                          ? `${Math.round(task.hours_until_due)} print hrs left` 
+                          : `${Math.abs(Math.round(task.hours_until_due))} print hrs overdue`}
+                      </span>
                     )}
                   </div>
                 </div>
