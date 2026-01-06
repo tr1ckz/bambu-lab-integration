@@ -21,6 +21,25 @@ const {
 } = require('./database');
 const { getThumbnail, clearThumbnailCache } = require('./thumbnail-generator');
 const { autoDescribeModel } = require('./ai-describer');
+
+// Helper function to clean HTML-encoded descriptions
+function cleanDescription(rawDescription) {
+  if (!rawDescription || typeof rawDescription !== 'string') return rawDescription;
+  
+  return rawDescription
+    // Decode common HTML entities
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    // Remove HTML tags
+    .replace(/<[^>]*>/g, '')
+    // Clean up whitespace
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 const bambuFtp = require('./src/services/bambuFtp');
 const backgroundSync = require('./src/services/backgroundSync');
 const videoConverter = require('./video-converter');
@@ -2455,6 +2474,38 @@ app.post('/api/library/:id/auto-tag', async (req, res) => {
   }
 });
 
+// Clean HTML-encoded descriptions in library
+app.post('/api/library/clean-descriptions', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  try {
+    // Get all library items with descriptions
+    const items = db.prepare('SELECT id, description FROM library WHERE description IS NOT NULL AND description != ""').all();
+    
+    let cleaned = 0;
+    for (const item of items) {
+      const originalDesc = item.description;
+      const cleanedDesc = cleanDescription(originalDesc);
+      
+      if (cleanedDesc !== originalDesc) {
+        db.prepare('UPDATE library SET description = ? WHERE id = ?').run(cleanedDesc, item.id);
+        cleaned++;
+      }
+    }
+    
+    res.json({ 
+      success: true, 
+      message: `Cleaned ${cleaned} descriptions`,
+      totalChecked: items.length 
+    });
+  } catch (error) {
+    console.error('Clean descriptions error:', error);
+    res.status(500).json({ error: 'Failed to clean descriptions' });
+  }
+});
+
 // Helper function to recursively walk directory
 function walkDirectory(dir, fileList = []) {
   const files = fs.readdirSync(dir);
@@ -2608,8 +2659,21 @@ app.get('/api/camera-snapshot', async (req, res) => {
   ffmpeg.on('close', (code) => {
     if (code === 0 && fs.existsSync(tempFile)) {
       console.log('FFmpeg snapshot captured successfully');
+      
+      // Check if file has content
+      const stats = fs.statSync(tempFile);
+      if (stats.size === 0) {
+        console.error('Captured file is empty');
+        fs.unlinkSync(tempFile);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Captured image is empty' });
+        }
+        return;
+      }
+      
       res.setHeader('Content-Type', 'image/jpeg');
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Content-Length', stats.size);
       
       const stream = fs.createReadStream(tempFile);
       stream.pipe(res);

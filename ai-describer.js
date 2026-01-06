@@ -3,6 +3,51 @@ const path = require('path');
 const JSZip = require('jszip');
 
 /**
+ * Clean and decode HTML-encoded text
+ */
+function cleanHTMLText(text) {
+  if (!text || typeof text !== 'string') return text;
+  
+  return text
+    // Decode common HTML entities
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    // Remove HTML tags
+    .replace(/<[^>]*>/g, '')
+    // Clean up whitespace
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Extract meaningful text from potentially HTML-encoded descriptions
+ */
+function extractDescription(rawDescription) {
+  if (!rawDescription) return '';
+  
+  const cleaned = cleanHTMLText(rawDescription);
+  
+  // Filter out common promotional/marketing terms
+  const meaningfulSentences = cleaned
+    .split(/[。.!]/) // Split on sentence endings (Chinese and English)
+    .filter(sentence => {
+      const s = sentence.trim();
+      // Skip empty, very short, or promotional sentences
+      if (!s || s.length < 10) return false;
+      if (/为我助力|boostme|点赞|like|订阅|subscribe/i.test(s)) return false;
+      return true;
+    })
+    .slice(0, 2) // Take first 2 meaningful sentences max
+    .join('. ');
+  
+  return meaningfulSentences || cleaned.substring(0, 100) + (cleaned.length > 100 ? '...' : '');
+}
+
+/**
  * Analyze filename for common 3D printing keywords and patterns
  */
 function analyzeFilename(fileName) {
@@ -361,5 +406,7 @@ module.exports = {
   autoDescribeModel,
   analyzeFilename,
   extract3MFMetadata,
-  analyzeSTLGeometry
+  analyzeSTLGeometry,
+  cleanHTMLText,
+  extractDescription
 };
