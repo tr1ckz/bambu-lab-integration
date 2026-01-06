@@ -4015,11 +4015,6 @@ async function sendDiscordNotification(type, data) {
     const pingUserId = pingUserIdRow?.value || '';
     const pingContent = pingUserId ? `<@${pingUserId}>` : '';
     
-    // Get the base URL for the logo
-    const baseUrlRow = getConfig.get('base_url');
-    const baseUrl = baseUrlRow?.value || '';
-    const logoUrl = baseUrl ? `${baseUrl}/images/logo.png` : '';
-    
     // Use GitHub raw link for logo
     const logoUrl = 'https://raw.githubusercontent.com/tr1ckz/PrintHive/refs/heads/main/public/images/logo.png';
     
