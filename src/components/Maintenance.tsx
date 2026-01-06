@@ -443,7 +443,7 @@ function Maintenance() {
                 <div className="preset-tasks">
                   <label>Quick Add Presets:</label>
                   <div className="preset-buttons">
-                    {PRESET_TASKS.slice(0, 5).map((preset, i) => (
+                    {PRESET_TASKS.map((preset, i) => (
                       <button
                         key={i}
                         type="button"

@@ -23,6 +23,8 @@ interface Print {
   hasVideo: boolean;
 }
 
+const ITEMS_PER_PAGE = 24;
+
 const PrintHistory: React.FC = () => {
   const [allPrints, setAllPrints] = useState<Print[]>([]);
   const [prints, setPrints] = useState<Print[]>([]);
@@ -30,6 +32,7 @@ const PrintHistory: React.FC = () => {
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
   const [syncing, setSyncing] = useState(false);
   const [syncingPrinter, setSyncingPrinter] = useState(false);
   const [showPrinterSync, setShowPrinterSync] = useState(false);
@@ -300,7 +303,13 @@ const PrintHistory: React.FC = () => {
     }
 
     setPrints(filtered);
+    setCurrentPage(1); // Reset to page 1 when filters change
   }, [searchTerm, statusFilter, allPrints]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(prints.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedPrints = prints.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   useEffect(() => {
     fetchPrints();
@@ -393,8 +402,9 @@ const PrintHistory: React.FC = () => {
           <p>Try adjusting your search or sync with the printer</p>
         </div>
       ) : (
+        <>
         <div className="prints-grid">
-          {prints.map((print) => {
+          {paginatedPrints.map((print) => {
             // Map numeric status codes: 2=success, 3=failed, 1=running, others=idle
             const statusNum = typeof print.status === 'string' ? parseInt(print.status) : print.status;
             const statusStr = statusNum === 2 ? 'success' : 
@@ -467,6 +477,47 @@ const PrintHistory: React.FC = () => {
             );
           })}
         </div>
+        
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="pagination">
+            <button 
+              className="pagination-btn" 
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+            >
+              «
+            </button>
+            <button 
+              className="pagination-btn" 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              ‹
+            </button>
+            
+            <div className="pagination-info">
+              Page {currentPage} of {totalPages}
+              <span className="pagination-total">({prints.length} prints)</span>
+            </div>
+            
+            <button 
+              className="pagination-btn" 
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+            >
+              ›
+            </button>
+            <button 
+              className="pagination-btn" 
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+            >
+              »
+            </button>
+          </div>
+        )}
+        </>
       )}
 
       {/* Video Modal */}

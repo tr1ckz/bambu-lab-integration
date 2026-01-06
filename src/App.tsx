@@ -36,13 +36,15 @@ function App() {
       
       const data = await response.json();
       
-      setIsAuthenticated(false);
-      
-      // If OIDC logout, redirect to provider's end-session endpoint
+      // If OIDC logout, redirect to provider's end-session endpoint FIRST
+      // Don't set authenticated to false yet - let the redirect happen
       if (data.oidcLogout && data.endSessionUrl) {
         window.location.href = data.endSessionUrl;
         return; // Don't continue after redirect
       }
+      
+      // Only set unauthenticated for non-OIDC logouts
+      setIsAuthenticated(false);
     } catch (error) {
       setIsAuthenticated(false);
     }

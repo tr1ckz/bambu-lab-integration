@@ -58,6 +58,7 @@ const BambuMqttClient = require('./mqtt-client');
 const coverImageFetcher = require('./cover-image-fetcher');
 
 const app = express();
+let httpServer = null; // Store reference for graceful shutdown
 const mqttClients = new Map(); // Store MQTT clients per printer
 const PORT = process.env.PORT || 3000;
 
@@ -4054,18 +4055,34 @@ app.post('/api/settings/restart', async (req, res) => {
   
   // Give time for response to be sent
   setTimeout(() => {
-    console.log('Restarting application via graceful process restart...');
-    // Close database and clean up
-    if (db) db.close();
-    // Spawn a new process and exit gracefully
-    const { spawn } = require('child_process');
-    const child = spawn(process.argv[0], process.argv.slice(1), {
-      detached: true,
-      stdio: 'inherit'
-    });
-    child.unref();
-    // Exit gracefully - Docker will see this and container stays running
-    process.exit(0);
+    console.log('Shutting down for restart - Docker will auto-restart the container...');
+    
+    // Close database gracefully
+    if (db) {
+      try {
+        db.close();
+        console.log('Database closed');
+      } catch (e) {
+        console.error('Error closing database:', e);
+      }
+    }
+    
+    // Close the HTTP server gracefully
+    if (httpServer) {
+      httpServer.close(() => {
+        console.log('HTTP server closed');
+        // Exit with code 0 - Docker's "restart: unless-stopped" will bring us back
+        process.exit(0);
+      });
+      
+      // Force exit after 5 seconds if server doesn't close gracefully
+      setTimeout(() => {
+        console.log('Force exit after timeout');
+        process.exit(0);
+      }, 5000);
+    } else {
+      process.exit(0);
+    }
   }, 2000);
 });
 
@@ -5230,7 +5247,7 @@ app.get('*', (req, res, next) => {
   res.sendFile(path.join(__dirname, staticDir, 'index.html'));
 });
 
-app.listen(PORT, async () => {
+httpServer = app.listen(PORT, async () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log('Database: SQLite (data/bambu.db)');
   console.log('Available routes:');
@@ -5353,18 +5370,56 @@ app.listen(PORT, async () => {
   await generateAllThumbnails();
 });
 
-// Cleanup on shutdown
-process.on('SIGINT', () => {
-  console.log('\nShutting down...');
+// Graceful shutdown handler
+let shuttingDown = false;
+const gracefulShutdown = (signal) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  
+  console.log(`\nReceived ${signal}, shutting down gracefully...`);
+  
+  // Stop background sync
+  try {
+    backgroundSync.stop();
+    console.log('Background sync stopped');
+  } catch (e) {}
   
   // Disconnect all MQTT clients
   for (const [key, client] of mqttClients.entries()) {
     console.log(`Disconnecting MQTT client for ${key}`);
-    client.disconnect();
+    try {
+      client.disconnect();
+    } catch (e) {}
   }
   mqttClients.clear();
   
-  process.exit(0);
-});
+  // Close database
+  if (db) {
+    try {
+      db.close();
+      console.log('Database closed');
+    } catch (e) {}
+  }
+  
+  // Close HTTP server
+  if (httpServer) {
+    httpServer.close(() => {
+      console.log('HTTP server closed');
+      process.exit(0);
+    });
+    
+    // Force exit after 10 seconds
+    setTimeout(() => {
+      console.log('Force exit after timeout');
+      process.exit(0);
+    }, 10000);
+  } else {
+    process.exit(0);
+  }
+};
+
+// Handle shutdown signals
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 
