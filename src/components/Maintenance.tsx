@@ -35,16 +35,22 @@ const TASK_TYPES = [
 ];
 
 const PRESET_TASKS = [
-  { task_name: 'Clean print bed', task_type: 'cleaning', description: 'Clean the print bed with IPA', interval_hours: 50 },
-  { task_name: 'Lubricate linear rails', task_type: 'lubrication', description: 'Apply lubricant to X, Y, and Z axis rails', interval_hours: 200 },
-  { task_name: 'Lubricate lead screws', task_type: 'lubrication', description: 'Apply lubricant to Z-axis lead screws', interval_hours: 200 },
-  { task_name: 'Clean nozzle', task_type: 'cleaning', description: 'Clean or replace nozzle to prevent clogs', interval_hours: 100 },
-  { task_name: 'Check belt tension', task_type: 'inspection', description: 'Check and adjust belt tension on all axes', interval_hours: 500 },
-  { task_name: 'Clean extruder gears', task_type: 'cleaning', description: 'Remove filament debris from extruder gears', interval_hours: 200 },
-  { task_name: 'Calibrate bed level', task_type: 'calibration', description: 'Run bed leveling calibration', interval_hours: 100 },
-  { task_name: 'Check PTFE tube', task_type: 'inspection', description: 'Inspect PTFE tube for wear or damage', interval_hours: 300 },
-  { task_name: 'Replace nozzle', task_type: 'replacement', description: 'Replace worn nozzle', interval_hours: 500 },
-  { task_name: 'Update firmware', task_type: 'firmware', description: 'Check for and install firmware updates', interval_hours: 720 }
+  { task_name: 'Clean Build Plate', task_type: 'cleaning', description: 'Wash with warm water & dish soap', interval_hours: 50 },
+  { task_name: 'Clean X-Axis Carbon Rods', task_type: 'cleaning', description: 'Wipe with IPA & microfiber. DO NOT GREASE.', interval_hours: 150 },
+  { task_name: 'Lube Z-Axis Lead Screws', task_type: 'lubrication', description: 'Clean old grease, apply white lithium grease', interval_hours: 500 },
+  { task_name: 'Clean Y-Axis Steel Rods', task_type: 'cleaning', description: 'Wipe with clean cloth/IPA', interval_hours: 150 },
+  { task_name: 'Clean Fans (Hotend/Aux/Board)', task_type: 'cleaning', description: 'Compressed air (hold blades still)', interval_hours: 300 },
+  { task_name: 'Check AMS Desiccant', task_type: 'inspection', description: 'Replace if color changes or soft', interval_hours: 336 },
+  { task_name: 'Clean AMS Feed Rollers', task_type: 'cleaning', description: 'Wipe with IPA (esp. for cardboard spools)', interval_hours: 500 },
+  { task_name: 'Inspect PTFE Tubes', task_type: 'inspection', description: 'Check for wear/rubbing inside AMS & path', interval_hours: 500 },
+  { task_name: 'Replace Carbon Filter', task_type: 'replacement', description: 'Swap filter (600hrs ABS, 1500hrs PLA)', interval_hours: 600 },
+  { task_name: 'Check Nozzle Wiper', task_type: 'inspection', description: 'Ensure PTFE tab is intact', interval_hours: 50 },
+  { task_name: 'Inspect Filament Cutter', task_type: 'inspection', description: 'Replace if dull/stuck', interval_hours: 1000 },
+  { task_name: 'Calibrate Bed Level', task_type: 'calibration', description: 'Run automatic bed leveling calibration', interval_hours: 100 },
+  { task_name: 'Check Belt Tension', task_type: 'inspection', description: 'Check and adjust belt tension on all axes', interval_hours: 500 },
+  { task_name: 'Clean Extruder Gears', task_type: 'cleaning', description: 'Remove filament debris from extruder gears', interval_hours: 200 },
+  { task_name: 'Replace Nozzle', task_type: 'replacement', description: 'Replace worn nozzle', interval_hours: 500 },
+  { task_name: 'Update Firmware', task_type: 'firmware', description: 'Check for and install firmware updates', interval_hours: 720 }
 ];
 
 function Maintenance() {

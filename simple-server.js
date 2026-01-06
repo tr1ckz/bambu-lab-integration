@@ -2689,8 +2689,8 @@ app.post('/api/library/:id/auto-tag', async (req, res) => {
     
     console.log(`  Analyzing: ${file.originalName}`);
     
-    // Build correct file path using fileName (stored path may be outdated)
-    const actualFilePath = path.join(libraryDir, file.fileName);
+    // Use the stored filePath which should be the full path
+    const actualFilePath = file.filePath;
     console.log(`  File path: ${actualFilePath}`);
     
     // Check if file exists
@@ -3466,7 +3466,7 @@ app.get('/api/maintenance', async (req, res) => {
       
       if (task.hours_until_due) {
         isOverdue = currentPrintHours >= task.hours_until_due;
-        isDueSoon = !isOverdue && (currentPrintHours >= task.hours_until_due - (task.interval_hours * 0.1));
+        isDueSoon = !isOverdue && (task.hours_until_due - currentPrintHours <= 50);
       } else if (task.next_due) {
         // Fallback to time-based if hours_until_due not set
         const now = new Date().toISOString();
@@ -3655,7 +3655,7 @@ app.get('/api/maintenance/summary', async (req, res) => {
       if (task.hours_until_due) {
         if (currentPrintHours >= task.hours_until_due) {
           overdue++;
-        } else if (currentPrintHours >= task.hours_until_due - (task.interval_hours * 0.1)) {
+        } else if (task.hours_until_due - currentPrintHours <= 50) {
           dueSoon++;
         }
       }
@@ -4148,7 +4148,7 @@ async function checkMaintenanceDueNotifications() {
       
       const notificationKey = `${task.id}`;
       const isOverdue = currentPrintHours >= task.hours_until_due;
-      const isDueSoon = !isOverdue && currentPrintHours >= task.hours_until_due - (task.interval_hours * 0.1);
+      const isDueSoon = !isOverdue && (task.hours_until_due - currentPrintHours <= 50);
       
       if (!isOverdue && !isDueSoon) continue;
       
