@@ -924,6 +924,18 @@ app.post('/api/match-videos', (req, res) => {
     console.log('Sample print startTime values:');
     samplePrints.forEach(p => console.log(`  Print ${p.id}: ${p.startTime}`));
     
+    // Get all prints that don't have videos yet
+    const printsWithoutVideo = db.prepare(`
+      SELECT id, modelId, title, startTime, endTime
+      FROM prints
+      WHERE (videoLocal IS NULL OR videoLocal = '')
+        AND startTime IS NOT NULL
+      ORDER BY startTime DESC
+    `).all();
+    
+    console.log(`Found ${printsWithoutVideo.length} prints without videos`);
+    console.log(`Found ${videoFiles.length} video files`);
+    
     let matched = 0;
     let unmatched = 0;
     const matchDetails = [];
@@ -934,51 +946,62 @@ app.post('/api/match-videos', (req, res) => {
       
       if (match) {
         const [, date, hours, minutes, seconds] = match;
-        // Video timestamp in ISO format: 2024-12-13T15:18:02
-        const videoTimestamp = `${date}T${hours}:${minutes}:${seconds}`;
+        // Create a Date object from the video timestamp (local time)
+        const videoDate = new Date(`${date}T${hours}:${minutes}:${seconds}`);
+        const videoTimestampMs = videoDate.getTime();
         
-        console.log(`Matching video ${videoFile} with timestamp ${videoTimestamp}`);
+        console.log(`Video: ${videoFile} -> Date: ${videoDate.toISOString()}`);
         
-        // First try exact-ish match (within 2 hour window)
-        let print = db.prepare(`
-          SELECT id, modelId, title, startTime, endTime
-          FROM prints
-          WHERE videoLocal IS NULL
-            AND startTime IS NOT NULL
-            AND (
-              -- Video timestamp is within 2 hours of print start
-              datetime(startTime) >= datetime(?, '-2 hours')
-              AND datetime(startTime) <= datetime(?, '+2 hours')
-            )
-          ORDER BY ABS(julianday(startTime) - julianday(?))
-          LIMIT 1
-        `).get(videoTimestamp, videoTimestamp, videoTimestamp);
+        // Find the best matching print
+        let bestMatch = null;
+        let bestTimeDiff = Infinity;
         
-        // If no match with ISO format, try with space instead of T
-        if (!print) {
-          const videoTimestampSpace = `${date} ${hours}:${minutes}:${seconds}`;
-          print = db.prepare(`
-            SELECT id, modelId, title, startTime, endTime
-            FROM prints
-            WHERE videoLocal IS NULL
-              AND startTime IS NOT NULL
-              AND (
-                datetime(startTime) >= datetime(?, '-2 hours')
-                AND datetime(startTime) <= datetime(?, '+2 hours')
-              )
-            ORDER BY ABS(julianday(startTime) - julianday(?))
-            LIMIT 1
-          `).get(videoTimestampSpace, videoTimestampSpace, videoTimestampSpace);
+        for (const print of printsWithoutVideo) {
+          // Parse the print's startTime
+          let printDate;
+          const st = print.startTime;
+          
+          // Try to parse different timestamp formats
+          if (/^\d+$/.test(st)) {
+            // Unix timestamp (seconds or milliseconds)
+            const ts = parseInt(st);
+            printDate = new Date(ts > 9999999999 ? ts : ts * 1000);
+          } else if (st.includes('T') || st.includes(' ')) {
+            // ISO format or similar
+            printDate = new Date(st);
+          } else {
+            continue; // Can't parse
+          }
+          
+          if (isNaN(printDate.getTime())) continue;
+          
+          const timeDiff = Math.abs(videoTimestampMs - printDate.getTime());
+          const hoursDiff = timeDiff / (1000 * 60 * 60);
+          
+          // Match within 4 hours
+          if (hoursDiff <= 4 && timeDiff < bestTimeDiff) {
+            bestTimeDiff = timeDiff;
+            bestMatch = print;
+          }
         }
         
-        if (print) {
-          db.prepare('UPDATE prints SET videoLocal = ? WHERE id = ?').run(videoFile, print.id);
+        if (bestMatch) {
+          db.prepare('UPDATE prints SET videoLocal = ? WHERE id = ?').run(videoFile, bestMatch.id);
+          // Remove from array so it's not matched again
+          const idx = printsWithoutVideo.findIndex(p => p.id === bestMatch.id);
+          if (idx > -1) printsWithoutVideo.splice(idx, 1);
+          
           matched++;
-          matchDetails.push({ video: videoFile, print: print.title || print.modelId, printStart: print.startTime });
-          console.log(`  Matched to print: ${print.title || print.modelId} (startTime: ${print.startTime})`);
+          matchDetails.push({ 
+            video: videoFile, 
+            print: bestMatch.title || bestMatch.modelId, 
+            printStart: bestMatch.startTime,
+            timeDiffMinutes: Math.round(bestTimeDiff / (1000 * 60))
+          });
+          console.log(`  Matched to print: ${bestMatch.title || bestMatch.modelId} (diff: ${Math.round(bestTimeDiff / 60000)}min)`);
         } else {
           unmatched++;
-          console.log(`  No matching print found`);
+          console.log(`  No matching print found for ${videoFile}`);
         }
       } else {
         unmatched++;

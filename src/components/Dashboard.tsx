@@ -7,13 +7,14 @@ import BuyMeACoffee from './BuyMeACoffee';
 import DashboardHome from './DashboardHome';
 import Maintenance from './Maintenance';
 import Printers from './Printers';
+import Statistics from './Statistics';
 import './Dashboard.css';
 
 interface DashboardProps {
   onLogout: () => void;
 }
 
-type Tab = 'home' | 'history' | 'library' | 'duplicates' | 'maintenance' | 'settings' | 'printers';
+type Tab = 'home' | 'history' | 'library' | 'duplicates' | 'maintenance' | 'settings' | 'printers' | 'statistics';
 
 interface UserInfo {
   username: string;
@@ -217,6 +218,7 @@ function Dashboard({ onLogout }: DashboardProps) {
           {activeTab === 'maintenance' && <Maintenance />}
           {activeTab === 'settings' && <Settings userRole={userInfo?.role} />}
           {activeTab === 'printers' && <Printers />}
+          {activeTab === 'statistics' && <Statistics />}
         </div>
       </main>
     </div>

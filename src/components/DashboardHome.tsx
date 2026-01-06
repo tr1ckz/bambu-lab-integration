@@ -246,6 +246,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ onNavigate }) => {
         <div className="widget quick-stats-widget">
           <div className="widget-header">
             <h3>📈 Statistics</h3>
+            <button className="widget-action" onClick={() => onNavigate('statistics')}>View Details →</button>
           </div>
           <div className="widget-content">
             <div className="quick-stats-grid">
