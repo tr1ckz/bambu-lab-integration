@@ -2,14 +2,17 @@ const mqtt = require('mqtt');
 const EventEmitter = require('events');
 
 class BambuMqttClient extends EventEmitter {
-  constructor(printerIp, serialNumber, accessCode) {
+  constructor(printerIp, serialNumber, accessCode, printerName = null) {
     super();
     this.printerIp = printerIp;
     this.serialNumber = serialNumber;
     this.accessCode = accessCode;
+    this.printerName = printerName || serialNumber;
     this.client = null;
     this.connected = false;
     this.currentJobData = null;
+    this.lastGcodeState = null; // Track state changes
+    this.lastPrintError = 0;
   }
 
   connect() {
@@ -131,6 +134,54 @@ class BambuMqttClient extends EventEmitter {
       } else if (this.currentJobData.rtsp_url) {
         newJobData.rtsp_url = this.currentJobData.rtsp_url;
       }
+      
+      // Detect state changes for notifications
+      const newGcodeState = newJobData.gcode_state;
+      const newPrintError = newJobData.print_error;
+      
+      // Check for state transitions
+      if (this.lastGcodeState && this.lastGcodeState !== newGcodeState) {
+        // Print just finished successfully
+        if (this.lastGcodeState === 'RUNNING' && newGcodeState === 'FINISH') {
+          this.emit('print_completed', {
+            printerName: this.printerName,
+            modelName: newJobData.name || newJobData.subtask_name || 'Unknown',
+            progress: 100
+          });
+        }
+        // Print failed or was cancelled
+        else if (this.lastGcodeState === 'RUNNING' && (newGcodeState === 'FAILED' || newGcodeState === 'IDLE')) {
+          if (newPrintError > 0 || newGcodeState === 'FAILED') {
+            this.emit('print_failed', {
+              printerName: this.printerName,
+              modelName: newJobData.name || newJobData.subtask_name || 'Unknown',
+              errorCode: newPrintError,
+              progress: newJobData.progress || 0
+            });
+          }
+        }
+        // Print paused
+        else if (this.lastGcodeState === 'RUNNING' && newGcodeState === 'PAUSE') {
+          this.emit('print_paused', {
+            printerName: this.printerName,
+            modelName: newJobData.name || newJobData.subtask_name || 'Unknown',
+            progress: newJobData.progress || 0
+          });
+        }
+      }
+      
+      // Check for new print errors
+      if (newPrintError > 0 && this.lastPrintError !== newPrintError) {
+        this.emit('print_error', {
+          printerName: this.printerName,
+          modelName: newJobData.name || newJobData.subtask_name || 'Unknown',
+          errorCode: newPrintError,
+          progress: newJobData.progress || 0
+        });
+      }
+      
+      this.lastGcodeState = newGcodeState;
+      this.lastPrintError = newPrintError;
       
       this.currentJobData = newJobData;
       this.emit('job_update', this.currentJobData);

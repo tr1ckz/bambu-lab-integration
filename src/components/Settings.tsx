@@ -59,6 +59,14 @@ function Settings({ userRole }: SettingsProps) {
   const [watchdogEndpoint, setWatchdogEndpoint] = useState('');
   const [watchdogLoading, setWatchdogLoading] = useState(false);
   
+  // Discord webhook settings state
+  const [discordPrinterWebhook, setDiscordPrinterWebhook] = useState('');
+  const [discordPrinterEnabled, setDiscordPrinterEnabled] = useState(false);
+  const [discordMaintenanceWebhook, setDiscordMaintenanceWebhook] = useState('');
+  const [discordMaintenanceEnabled, setDiscordMaintenanceEnabled] = useState(false);
+  const [discordLoading, setDiscordLoading] = useState(false);
+  const [discordTesting, setDiscordTesting] = useState<string | null>(null);
+  
   // User profile state
   const [userProfile, setUserProfile] = useState({ username: '', email: '', displayName: '', oauthProvider: 'none' });
   const [profileLoading, setProfileLoading] = useState(false);
@@ -84,6 +92,7 @@ function Settings({ userRole }: SettingsProps) {
     loadOAuthSettings();
     loadUiSettings();
     loadWatchdogSettings();
+    loadDiscordSettings();
     loadUserProfile();
     loadCostSettings();
   }, []);
@@ -223,6 +232,73 @@ function Settings({ userRole }: SettingsProps) {
       setToast({ message: 'Failed to save watchdog settings', type: 'error' });
     } finally {
       setWatchdogLoading(false);
+    }
+  };
+
+  // Discord webhook functions
+  const loadDiscordSettings = async () => {
+    try {
+      const response = await fetch('/api/settings/discord');
+      const data = await response.json();
+      if (!response.ok) return;
+      setDiscordPrinterWebhook(data.printerWebhook || '');
+      setDiscordPrinterEnabled(data.printerEnabled || false);
+      setDiscordMaintenanceWebhook(data.maintenanceWebhook || '');
+      setDiscordMaintenanceEnabled(data.maintenanceEnabled || false);
+    } catch (error) {
+      console.error('Failed to load Discord settings:', error);
+    }
+  };
+
+  const handleSaveDiscordSettings = async () => {
+    setDiscordLoading(true);
+    try {
+      const response = await fetch('/api/settings/discord', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          printerWebhook: discordPrinterWebhook,
+          printerEnabled: discordPrinterEnabled,
+          maintenanceWebhook: discordMaintenanceWebhook,
+          maintenanceEnabled: discordMaintenanceEnabled
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setToast({ message: 'Discord webhook settings saved!', type: 'success' });
+      } else {
+        setToast({ message: 'Failed to save Discord settings', type: 'error' });
+      }
+    } catch (error) {
+      setToast({ message: 'Failed to save Discord settings', type: 'error' });
+    } finally {
+      setDiscordLoading(false);
+    }
+  };
+
+  const handleTestDiscordWebhook = async (type: 'printer' | 'maintenance') => {
+    const webhook = type === 'printer' ? discordPrinterWebhook : discordMaintenanceWebhook;
+    if (!webhook) {
+      setToast({ message: 'Please enter a webhook URL first', type: 'error' });
+      return;
+    }
+    setDiscordTesting(type);
+    try {
+      const response = await fetch('/api/discord/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, webhook })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setToast({ message: `Test ${type} notification sent!`, type: 'success' });
+      } else {
+        setToast({ message: data.error || 'Failed to send test notification', type: 'error' });
+      }
+    } catch (error) {
+      setToast({ message: 'Failed to send test notification', type: 'error' });
+    } finally {
+      setDiscordTesting(null);
     }
   };
 
@@ -1157,6 +1233,108 @@ function Settings({ userRole }: SettingsProps) {
           disabled={watchdogLoading}
         >
           {watchdogLoading ? 'Saving...' : 'Save Watchdog Settings'}
+        </button>
+      </div>
+
+      {/* Discord Webhooks Section */}
+      <div className="settings-section">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: '24px', height: '24px', marginRight: '0.5rem', verticalAlign: 'middle' }}>
+            <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z" fill="none" stroke="currentColor"/>
+          </svg>
+          Discord Webhooks
+        </h2>
+        <p className="form-description">
+          Get instant Discord notifications for print failures and maintenance alerts
+        </p>
+
+        {/* Printer Alerts Webhook */}
+        <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <label className="toggle-switch" style={{ marginRight: '1rem' }}>
+              <input
+                type="checkbox"
+                checked={discordPrinterEnabled}
+                onChange={(e) => setDiscordPrinterEnabled(e.target.checked)}
+                disabled={discordLoading}
+              />
+              <span className="toggle-slider"></span>
+            </label>
+            <span style={{ fontWeight: 500, color: '#fff' }}>Printer Alerts</span>
+          </div>
+          <small style={{ color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '0.75rem' }}>
+            Get notified when prints fail, encounter errors, or complete
+          </small>
+          {discordPrinterEnabled && (
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                type="url"
+                value={discordPrinterWebhook}
+                onChange={(e) => setDiscordPrinterWebhook(e.target.value)}
+                placeholder="https://discord.com/api/webhooks/..."
+                disabled={discordLoading}
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => handleTestDiscordWebhook('printer')}
+                disabled={discordTesting === 'printer' || !discordPrinterWebhook}
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                {discordTesting === 'printer' ? 'Sending...' : 'Test'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Maintenance Alerts Webhook */}
+        <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <label className="toggle-switch" style={{ marginRight: '1rem' }}>
+              <input
+                type="checkbox"
+                checked={discordMaintenanceEnabled}
+                onChange={(e) => setDiscordMaintenanceEnabled(e.target.checked)}
+                disabled={discordLoading}
+              />
+              <span className="toggle-slider"></span>
+            </label>
+            <span style={{ fontWeight: 500, color: '#fff' }}>Maintenance Alerts</span>
+          </div>
+          <small style={{ color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '0.75rem' }}>
+            Get notified when scheduled maintenance is due or overdue
+          </small>
+          {discordMaintenanceEnabled && (
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                type="url"
+                value={discordMaintenanceWebhook}
+                onChange={(e) => setDiscordMaintenanceWebhook(e.target.value)}
+                placeholder="https://discord.com/api/webhooks/..."
+                disabled={discordLoading}
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => handleTestDiscordWebhook('maintenance')}
+                disabled={discordTesting === 'maintenance' || !discordMaintenanceWebhook}
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                {discordTesting === 'maintenance' ? 'Sending...' : 'Test'}
+              </button>
+            </div>
+          )}
+        </div>
+        
+        <button 
+          type="button" 
+          className="btn btn-primary" 
+          onClick={handleSaveDiscordSettings}
+          disabled={discordLoading}
+        >
+          {discordLoading ? 'Saving...' : 'Save Discord Settings'}
         </button>
       </div>
 

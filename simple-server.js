@@ -1266,7 +1266,7 @@ app.get('/api/printers', async (req, res) => {
           // Create or get existing MQTT client for this printer
           if (!mqttClients.has(clientKey)) {
             try {
-              const mqttClient = new BambuMqttClient(printerIp, device.dev_id, accessCode);
+              const mqttClient = new BambuMqttClient(printerIp, device.dev_id, accessCode, device.name);
               
               // Handle connection errors gracefully
               mqttClient.on('error', (error) => {
@@ -1277,6 +1277,53 @@ app.get('/api/printers', async (req, res) => {
               mqttClient.on('disconnected', () => {
                 console.log(`MQTT disconnected for ${device.dev_id}`);
                 mqttClients.delete(clientKey);
+              });
+              
+              // Handle print state changes for Discord notifications
+              mqttClient.on('print_completed', async (data) => {
+                console.log(`Print completed on ${data.printerName}:`, data.modelName);
+                await sendDiscordNotification('printer', {
+                  status: 'completed',
+                  printerName: data.printerName,
+                  modelName: data.modelName,
+                  progress: data.progress,
+                  message: `Print job "${data.modelName}" has completed successfully!`
+                });
+              });
+              
+              mqttClient.on('print_failed', async (data) => {
+                console.log(`Print FAILED on ${data.printerName}:`, data);
+                await sendDiscordNotification('printer', {
+                  status: 'failed',
+                  printerName: data.printerName,
+                  modelName: data.modelName,
+                  errorCode: data.errorCode ? `0x${data.errorCode.toString(16).toUpperCase()}` : undefined,
+                  progress: data.progress,
+                  message: `Print job "${data.modelName}" has FAILED at ${data.progress}%!`
+                });
+              });
+              
+              mqttClient.on('print_error', async (data) => {
+                console.log(`Print ERROR on ${data.printerName}:`, data);
+                await sendDiscordNotification('printer', {
+                  status: 'error',
+                  printerName: data.printerName,
+                  modelName: data.modelName,
+                  errorCode: data.errorCode ? `0x${data.errorCode.toString(16).toUpperCase()}` : undefined,
+                  progress: data.progress,
+                  message: `Printer error detected during "${data.modelName}" at ${data.progress}%`
+                });
+              });
+              
+              mqttClient.on('print_paused', async (data) => {
+                console.log(`Print paused on ${data.printerName}:`, data.modelName);
+                await sendDiscordNotification('printer', {
+                  status: 'paused',
+                  printerName: data.printerName,
+                  modelName: data.modelName,
+                  progress: data.progress,
+                  message: `Print job "${data.modelName}" has been paused at ${data.progress}%`
+                });
               });
               
               await mqttClient.connect();
@@ -3752,6 +3799,228 @@ app.post('/api/settings/watchdog', async (req, res) => {
   }
 });
 
+// Get Discord webhook settings
+app.get('/api/settings/discord', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  try {
+    const getConfig = db.prepare('SELECT value FROM config WHERE key = ?');
+    const printerWebhook = getConfig.get('discord_printer_webhook');
+    const printerEnabled = getConfig.get('discord_printer_enabled');
+    const maintenanceWebhook = getConfig.get('discord_maintenance_webhook');
+    const maintenanceEnabled = getConfig.get('discord_maintenance_enabled');
+    
+    res.json({
+      printerWebhook: printerWebhook?.value || '',
+      printerEnabled: printerEnabled?.value === 'true',
+      maintenanceWebhook: maintenanceWebhook?.value || '',
+      maintenanceEnabled: maintenanceEnabled?.value === 'true'
+    });
+  } catch (error) {
+    console.error('Error getting Discord settings:', error);
+    res.status(500).json({ error: 'Failed to get Discord settings' });
+  }
+});
+
+// Save Discord webhook settings
+app.post('/api/settings/discord', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  // Check if user is admin
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
+  if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  try {
+    const { printerWebhook, printerEnabled, maintenanceWebhook, maintenanceEnabled } = req.body;
+    
+    const upsert = db.prepare(`
+      INSERT INTO config (key, value) VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `);
+    
+    upsert.run('discord_printer_webhook', printerWebhook || '');
+    upsert.run('discord_printer_enabled', printerEnabled ? 'true' : 'false');
+    upsert.run('discord_maintenance_webhook', maintenanceWebhook || '');
+    upsert.run('discord_maintenance_enabled', maintenanceEnabled ? 'true' : 'false');
+    
+    res.json({ success: true, message: 'Discord settings saved!' });
+  } catch (error) {
+    console.error('Error saving Discord settings:', error);
+    res.status(500).json({ error: 'Failed to save Discord settings' });
+  }
+});
+
+// Test Discord webhook
+app.post('/api/discord/test', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  try {
+    const { type, webhook } = req.body;
+    
+    if (!webhook || !webhook.startsWith('https://discord.com/api/webhooks/')) {
+      return res.status(400).json({ error: 'Invalid Discord webhook URL' });
+    }
+    
+    let embed;
+    if (type === 'printer') {
+      embed = {
+        title: '🖨️ Printer Alert Test',
+        description: 'This is a test notification from PrintHive!',
+        color: 0x00D4FF, // Cyan color
+        fields: [
+          { name: 'Printer', value: 'Test Printer', inline: true },
+          { name: 'Status', value: '✅ Connected', inline: true },
+          { name: 'Event', value: 'Test Notification', inline: false }
+        ],
+        footer: { text: 'PrintHive • Printer Alerts' },
+        timestamp: new Date().toISOString()
+      };
+    } else {
+      embed = {
+        title: '🔧 Maintenance Alert Test',
+        description: 'This is a test notification from PrintHive!',
+        color: 0xFFA500, // Orange color
+        fields: [
+          { name: 'Task', value: 'Test Maintenance Task', inline: true },
+          { name: 'Printer', value: 'Test Printer', inline: true },
+          { name: 'Status', value: '⚠️ Due Soon', inline: false }
+        ],
+        footer: { text: 'PrintHive • Maintenance Alerts' },
+        timestamp: new Date().toISOString()
+      };
+    }
+    
+    const response = await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'PrintHive',
+        avatar_url: 'https://cdn-icons-png.flaticon.com/512/3413/3413536.png',
+        embeds: [embed]
+      })
+    });
+    
+    if (response.ok) {
+      res.json({ success: true });
+    } else {
+      const errorText = await response.text();
+      console.error('Discord webhook error:', errorText);
+      res.status(400).json({ error: 'Failed to send to Discord' });
+    }
+  } catch (error) {
+    console.error('Error testing Discord webhook:', error);
+    res.status(500).json({ error: 'Failed to send test notification' });
+  }
+});
+
+// Helper function to send Discord notifications
+async function sendDiscordNotification(type, data) {
+  try {
+    const getConfig = db.prepare('SELECT value FROM config WHERE key = ?');
+    
+    let webhookUrl, enabled;
+    if (type === 'printer') {
+      const webhookRow = getConfig.get('discord_printer_webhook');
+      const enabledRow = getConfig.get('discord_printer_enabled');
+      webhookUrl = webhookRow?.value;
+      enabled = enabledRow?.value === 'true';
+    } else if (type === 'maintenance') {
+      const webhookRow = getConfig.get('discord_maintenance_webhook');
+      const enabledRow = getConfig.get('discord_maintenance_enabled');
+      webhookUrl = webhookRow?.value;
+      enabled = enabledRow?.value === 'true';
+    }
+    
+    if (!enabled || !webhookUrl) {
+      return false;
+    }
+    
+    let embed;
+    if (type === 'printer') {
+      const statusColors = {
+        'failed': 0xFF0000,    // Red
+        'error': 0xFF0000,     // Red
+        'completed': 0x00FF00, // Green
+        'paused': 0xFFFF00,    // Yellow
+        'offline': 0x808080    // Gray
+      };
+      
+      const statusEmojis = {
+        'failed': '❌',
+        'error': '⚠️',
+        'completed': '✅',
+        'paused': '⏸️',
+        'offline': '📴'
+      };
+      
+      embed = {
+        title: `${statusEmojis[data.status] || '🖨️'} Print ${data.status?.charAt(0).toUpperCase() + data.status?.slice(1) || 'Alert'}`,
+        description: data.message || 'Printer status update',
+        color: statusColors[data.status] || 0x00D4FF,
+        fields: [],
+        footer: { text: 'PrintHive • Printer Alerts' },
+        timestamp: new Date().toISOString()
+      };
+      
+      if (data.printerName) embed.fields.push({ name: 'Printer', value: data.printerName, inline: true });
+      if (data.modelName) embed.fields.push({ name: 'Model', value: data.modelName, inline: true });
+      if (data.progress !== undefined) embed.fields.push({ name: 'Progress', value: `${data.progress}%`, inline: true });
+      if (data.timeElapsed) embed.fields.push({ name: 'Time', value: data.timeElapsed, inline: true });
+      if (data.errorCode) embed.fields.push({ name: 'Error Code', value: data.errorCode, inline: true });
+      
+    } else if (type === 'maintenance') {
+      const statusColors = {
+        'due': 0xFFA500,      // Orange
+        'overdue': 0xFF0000,  // Red
+        'completed': 0x00FF00 // Green
+      };
+      
+      const statusEmojis = {
+        'due': '⚠️',
+        'overdue': '🚨',
+        'completed': '✅'
+      };
+      
+      embed = {
+        title: `${statusEmojis[data.status] || '🔧'} Maintenance ${data.status?.charAt(0).toUpperCase() + data.status?.slice(1) || 'Alert'}`,
+        description: data.message || 'Maintenance task needs attention',
+        color: statusColors[data.status] || 0xFFA500,
+        fields: [],
+        footer: { text: 'PrintHive • Maintenance Alerts' },
+        timestamp: new Date().toISOString()
+      };
+      
+      if (data.taskName) embed.fields.push({ name: 'Task', value: data.taskName, inline: true });
+      if (data.printerName) embed.fields.push({ name: 'Printer', value: data.printerName, inline: true });
+      if (data.currentHours !== undefined) embed.fields.push({ name: 'Current Hours', value: `${data.currentHours.toFixed(1)}h`, inline: true });
+      if (data.dueAtHours !== undefined) embed.fields.push({ name: 'Due At', value: `${data.dueAtHours.toFixed(1)}h`, inline: true });
+    }
+    
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'PrintHive',
+        avatar_url: 'https://cdn-icons-png.flaticon.com/512/3413/3413536.png',
+        embeds: [embed]
+      })
+    });
+    
+    return response.ok;
+  } catch (error) {
+    console.error('Error sending Discord notification:', error);
+    return false;
+  }
+}
+
 // Watchdog interval reference
 let watchdogTimer = null;
 
@@ -3799,6 +4068,94 @@ function setupWatchdog() {
     }, interval * 1000);
   } catch (error) {
     console.error('Failed to setup watchdog:', error);
+  }
+}
+
+// Maintenance notification timer reference
+let maintenanceNotificationTimer = null;
+let lastMaintenanceNotifications = new Map(); // Track what we've already notified about
+
+// Setup maintenance notification checker
+function setupMaintenanceNotifications() {
+  // Clear existing timer
+  if (maintenanceNotificationTimer) {
+    clearInterval(maintenanceNotificationTimer);
+    maintenanceNotificationTimer = null;
+  }
+  
+  console.log('Setting up maintenance notification checker (every 1 hour)...');
+  
+  // Check every hour
+  maintenanceNotificationTimer = setInterval(async () => {
+    await checkMaintenanceDueNotifications();
+  }, 60 * 60 * 1000);
+  
+  // Also run immediately on startup (after a delay)
+  setTimeout(() => {
+    checkMaintenanceDueNotifications();
+  }, 30000);
+}
+
+// Check for maintenance tasks that are due or overdue and send Discord notifications
+async function checkMaintenanceDueNotifications() {
+  try {
+    const getConfig = db.prepare('SELECT value FROM config WHERE key = ?');
+    const enabledRow = getConfig.get('discord_maintenance_enabled');
+    const webhookRow = getConfig.get('discord_maintenance_webhook');
+    
+    if (enabledRow?.value !== 'true' || !webhookRow?.value) {
+      return; // Maintenance notifications not enabled
+    }
+    
+    // Get current print hours
+    const prints = db.prepare('SELECT costTime FROM prints').all();
+    let totalPrintSeconds = 0;
+    for (const print of prints) {
+      if (print.costTime) {
+        totalPrintSeconds += print.costTime;
+      }
+    }
+    const currentPrintHours = totalPrintSeconds / 3600;
+    
+    // Get all maintenance tasks
+    const tasks = db.prepare('SELECT * FROM maintenance_tasks').all();
+    
+    for (const task of tasks) {
+      if (!task.hours_until_due) continue;
+      
+      const notificationKey = `${task.id}`;
+      const isOverdue = currentPrintHours >= task.hours_until_due;
+      const isDueSoon = !isOverdue && currentPrintHours >= task.hours_until_due - (task.interval_hours * 0.1);
+      
+      if (!isOverdue && !isDueSoon) continue;
+      
+      // Check if we've already notified about this status
+      const lastStatus = lastMaintenanceNotifications.get(notificationKey);
+      const currentStatus = isOverdue ? 'overdue' : 'due';
+      
+      if (lastStatus === currentStatus) continue; // Already notified
+      
+      // Send notification
+      const hoursOverdue = currentPrintHours - task.hours_until_due;
+      const message = isOverdue 
+        ? `This maintenance task is ${hoursOverdue.toFixed(1)} print hours overdue!`
+        : `This maintenance task will be due in approximately ${(task.hours_until_due - currentPrintHours).toFixed(1)} print hours.`;
+      
+      await sendDiscordNotification('maintenance', {
+        status: currentStatus,
+        taskName: task.task_name,
+        printerName: task.printer_id || 'All Printers',
+        currentHours: currentPrintHours,
+        dueAtHours: task.hours_until_due,
+        message
+      });
+      
+      // Mark as notified
+      lastMaintenanceNotifications.set(notificationKey, currentStatus);
+      console.log(`Sent Discord ${currentStatus} notification for maintenance task: ${task.task_name}`);
+    }
+  } catch (error) {
+    console.error('Error checking maintenance notifications:', error);
   }
 }
 
@@ -4520,6 +4877,9 @@ app.listen(PORT, async () => {
   
   // Initialize watchdog
   setupWatchdog();
+  
+  // Initialize maintenance notification checker
+  setupMaintenanceNotifications();
   
   // Auto-scan library on startup
   console.log('\n=== Scanning library directory ===');
