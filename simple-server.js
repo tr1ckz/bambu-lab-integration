@@ -275,9 +275,9 @@ app.get('/auth/oidc/callback', async (req, res) => {
       console.log('Existing user by email:', user ? user.username : 'none');
       
       if (user) {
-        // Link existing user to OAuth
+        // Link existing user to OAuth and update display name
         console.log('Linking existing user to OAuth');
-        db.prepare('UPDATE users SET oauth_provider = ?, oauth_id = ? WHERE id = ?').run('oidc', sub, user.id);
+        db.prepare('UPDATE users SET oauth_provider = ?, oauth_id = ?, display_name = ? WHERE id = ?').run('oidc', sub, name, user.id);
       }
     }
     
@@ -285,14 +285,15 @@ app.get('/auth/oidc/callback', async (req, res) => {
       // Create new user
       console.log('Creating new OIDC user:', username, email);
       const result = db.prepare(
-        'INSERT INTO users (username, email, oauth_provider, oauth_id, role, password) VALUES (?, ?, ?, ?, ?, ?)'
+        'INSERT INTO users (username, email, oauth_provider, oauth_id, role, password, display_name) VALUES (?, ?, ?, ?, ?, ?, ?)'
       ).run(
         username,
         email || '',
         'oidc',
         sub,
         'user',
-        '' // No password for OAuth users
+        '', // No password for OAuth users
+        name
       );
       user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
       console.log('New user created with ID:', user.id);
@@ -818,6 +819,58 @@ app.post('/api/settings/ui', (req, res) => {
   } catch (error) {
     console.error('Failed to save UI settings:', error);
     res.status(500).json({ error: 'Failed to save UI settings' });
+  }
+});
+
+// Get user profile
+app.get('/api/settings/profile', (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  try {
+    const user = db.prepare('SELECT username, email, display_name, oauth_provider FROM users WHERE id = ?').get(req.session.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({
+      username: user.username,
+      email: user.email || '',
+      displayName: user.display_name || '',
+      oauthProvider: user.oauth_provider || 'none'
+    });
+  } catch (error) {
+    console.error('Failed to get user profile:', error);
+    res.status(500).json({ error: 'Failed to get user profile' });
+  }
+});
+
+// Update user profile
+app.post('/api/settings/profile', (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  try {
+    const { displayName, email } = req.body;
+    
+    // Update user profile
+    const user = db.prepare('SELECT oauth_provider FROM users WHERE id = ?').get(req.session.userId);
+    
+    // For OAuth users, only allow display name changes if email is not managed by OAuth
+    if (user.oauth_provider && email !== undefined) {
+      // Don't allow email changes for OAuth users
+      db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(displayName, req.session.userId);
+    } else {
+      // Local users can change both
+      db.prepare('UPDATE users SET display_name = ?, email = ? WHERE id = ?').run(displayName, email, req.session.userId);
+    }
+    
+    res.json({ success: true, message: 'Profile updated successfully!' });
+  } catch (error) {
+    console.error('Failed to update user profile:', error);
+    res.status(500).json({ error: 'Failed to update user profile' });
   }
 });
 

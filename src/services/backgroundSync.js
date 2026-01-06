@@ -97,9 +97,14 @@ class BackgroundSyncService {
       return;
     }
 
-    // Download timelapses - DISABLED (convert existing only)
+    // Download timelapses
     const videosDir = path.join(__dirname, '..', '..', 'data', 'videos');
-    const downloaded = [];
+    const downloaded = await bambuFtp.downloadAllTimelapses(videosDir);
+    
+    if (downloaded.length > 0) {
+      const newVideos = downloaded.filter(d => !d.skipped).length;
+      console.log(`  ✓ Synced ${downloaded.length} timelapse videos (${newVideos} new) from ${printer_ip}`);
+    }
 
     // Download 3MF files from /model directory
     const modelsDir = path.join(__dirname, '..', '..', 'data', 'models');

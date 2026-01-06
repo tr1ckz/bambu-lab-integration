@@ -33,6 +33,7 @@ db.exec(`
     oauth_provider TEXT,
     oauth_id TEXT,
     role TEXT DEFAULT 'user',
+    display_name TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
   
@@ -289,6 +290,15 @@ try {
 } catch (e) {
   if (!e.message.includes('duplicate column')) {
     console.log('oauth_id column migration check:', e.message);
+  }
+}
+
+try {
+  db.exec(`ALTER TABLE users ADD COLUMN display_name TEXT`);
+  console.log('✓ Added display_name column to users table');
+} catch (e) {
+  if (!e.message.includes('duplicate column')) {
+    console.log('display_name column migration check:', e.message);
   }
 }
 

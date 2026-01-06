@@ -53,6 +53,10 @@ function Settings() {
   const [watchdogEndpoint, setWatchdogEndpoint] = useState('');
   const [watchdogLoading, setWatchdogLoading] = useState(false);
   
+  // User profile state
+  const [userProfile, setUserProfile] = useState({ username: '', email: '', displayName: '', oauthProvider: 'none' });
+  const [profileLoading, setProfileLoading] = useState(false);
+  
   // System state
   const [restarting, setRestarting] = useState(false);
   const [confirmRestart, setConfirmRestart] = useState(false);
@@ -67,6 +71,7 @@ function Settings() {
     loadOAuthSettings();
     loadUiSettings();
     loadWatchdogSettings();
+    loadUserProfile();
   }, []);
 
   useEffect(() => {
@@ -204,6 +209,41 @@ function Settings() {
       setToast({ message: 'Failed to save watchdog settings', type: 'error' });
     } finally {
       setWatchdogLoading(false);
+    }
+  };
+
+  const loadUserProfile = async () => {
+    try {
+      const response = await fetch('/api/settings/profile');
+      const data = await response.json();
+      if (!response.ok) return;
+      setUserProfile(data);
+    } catch (error) {
+      console.error('Failed to load user profile:', error);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    setProfileLoading(true);
+    try {
+      const response = await fetch('/api/settings/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          displayName: userProfile.displayName,
+          email: userProfile.email
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setToast({ message: 'Profile updated!', type: 'success' });
+      } else {
+        setToast({ message: 'Failed to update profile', type: 'error' });
+      }
+    } catch (error) {
+      setToast({ message: 'Failed to update profile', type: 'error' });
+    } finally {
+      setProfileLoading(false);
     }
   };
 
@@ -763,6 +803,63 @@ function Settings() {
         </form>
       </div>
       
+      {/* User Profile Section */}
+      <div className="settings-section">
+        <h2>User Profile</h2>
+        <p className="form-description">
+          Manage your account information and display preferences
+        </p>
+        
+        <div className="form-group">
+          <label>Username</label>
+          <input
+            type="text"
+            value={userProfile.username}
+            disabled
+            style={{ opacity: 0.6, cursor: 'not-allowed' }}
+          />
+          <small style={{ color: 'rgba(255,255,255,0.5)', display: 'block', marginTop: '0.5rem' }}>
+            Username cannot be changed
+          </small>
+        </div>
+        
+        <div className="form-group">
+          <label>Email</label>
+          <input
+            type="email"
+            value={userProfile.email}
+            onChange={(e) => setUserProfile(prev => ({ ...prev, email: e.target.value }))}
+            placeholder="your@email.com"
+            disabled={profileLoading || userProfile.oauthProvider !== 'none'}
+          />
+          {userProfile.oauthProvider !== 'none' && (
+            <small style={{ color: 'rgba(255,255,255,0.5)', display: 'block', marginTop: '0.5rem' }}>
+              Email is managed by {userProfile.oauthProvider === 'oidc' ? 'SSO provider' : userProfile.oauthProvider}
+            </small>
+          )}
+        </div>
+        
+        <div className="form-group">
+          <label>Display Name</label>
+          <input
+            type="text"
+            value={userProfile.displayName}
+            onChange={(e) => setUserProfile(prev => ({ ...prev, displayName: e.target.value }))}
+            placeholder="Your full name"
+            disabled={profileLoading}
+          />
+        </div>
+        
+        <button 
+          type="button" 
+          className="btn btn-primary" 
+          onClick={handleSaveProfile}
+          disabled={profileLoading}
+        >
+          {profileLoading ? 'Saving...' : 'Save Profile'}
+        </button>
+      </div>
+
       <div className="settings-section">
         <h2>Account Security</h2>
         
