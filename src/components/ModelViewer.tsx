@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { ThreeMFLoader } from 'threejs-webworker-3mf-loader';
+import ConfirmModal from './ConfirmModal';
 import './ModelViewer.css';
 
 interface ModelViewerProps {
@@ -15,7 +16,13 @@ interface ModelViewerProps {
 const ModelViewer: React.FC<ModelViewerProps> = ({ fileId, fileName, fileType, onClose }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);  const [confirmLargeFile, setConfirmLargeFile] = useState<{ size: number } | null>(null);  const sceneRef = useRef<THREE.Scene | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmLargeFile, setConfirmLargeFile] = useState<{ size: number } | null>(null);
+  const [wireframe, setWireframe] = useState(false);
+  const [autoRotate, setAutoRotate] = useState(false);
+  const [sliceHeight, setSliceHeight] = useState<number | null>(null);
+  const [modelHeight, setModelHeight] = useState(100);
+  const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const animationIdRef = useRef<number | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
@@ -89,6 +96,8 @@ const ModelViewer: React.FC<ModelViewerProps> = ({ fileId, fileName, fileType, o
     controls.rotateSpeed = 1.0;
     controls.panSpeed = 0.8;
     controls.enabled = true;
+    controls.autoRotate = false;
+    controls.autoRotateSpeed = 2.0;
     controlsRef.current = controls;
 
     // Render function
@@ -158,8 +167,12 @@ const ModelViewer: React.FC<ModelViewerProps> = ({ fileId, fileName, fileType, o
       // Update camera
       const finalBox = new THREE.Box3().setFromObject(mesh);
       const finalCenter = finalBox.getCenter(new THREE.Vector3());
+      const finalSize = finalBox.getSize(new THREE.Vector3());
       const bsphere = new THREE.Sphere();
       finalBox.getBoundingSphere(bsphere);
+      
+      // Store model height for slice control
+      setModelHeight(finalSize.y);
       
       const radius = bsphere.radius;
       const cameraDistance = radius * 2.5;
@@ -548,6 +561,67 @@ const ModelViewer: React.FC<ModelViewerProps> = ({ fileId, fileName, fileType, o
     };
   }, [fileId, fileType]);
 
+  // Update auto-rotate when state changes
+  useEffect(() => {
+    if (controlsRef.current) {
+      controlsRef.current.autoRotate = autoRotate;
+    }
+  }, [autoRotate]);
+
+  // Toggle wireframe mode
+  const toggleWireframe = () => {
+    if (!sceneRef.current) return;
+    
+    sceneRef.current.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach(m => { m.wireframe = !wireframe; });
+        } else {
+          child.material.wireframe = !wireframe;
+        }
+      }
+    });
+    setWireframe(!wireframe);
+  };
+
+  // Reset camera position
+  const resetCamera = () => {
+    if (!cameraRef.current || !controlsRef.current || !sceneRef.current) return;
+    
+    const model = sceneRef.current.getObjectByName('loaded-model');
+    if (model) {
+      const box = new THREE.Box3().setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      const bsphere = new THREE.Sphere();
+      box.getBoundingSphere(bsphere);
+      
+      const radius = bsphere.radius;
+      const cameraDistance = radius * 2.5;
+      
+      cameraRef.current.position.set(
+        center.x + cameraDistance,
+        center.y + cameraDistance * 0.6,
+        center.z + cameraDistance
+      );
+      controlsRef.current.target.copy(center);
+      controlsRef.current.update();
+    }
+  };
+
+  // Update slice clipping plane
+  useEffect(() => {
+    if (!sceneRef.current || !rendererRef.current) return;
+    
+    if (sliceHeight !== null) {
+      const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), sliceHeight);
+      rendererRef.current.clippingPlanes = [clipPlane];
+      rendererRef.current.localClippingEnabled = true;
+    } else {
+      rendererRef.current.clippingPlanes = [];
+      rendererRef.current.localClippingEnabled = false;
+    }
+  }, [sliceHeight]);
+
   return (
     <div className="model-viewer-overlay" onClick={onClose}>
       <div className="model-viewer-container" onClick={(e) => e.stopPropagation()}>
@@ -560,6 +634,64 @@ const ModelViewer: React.FC<ModelViewerProps> = ({ fileId, fileName, fileType, o
         </div>
         
         <div ref={containerRef} className="viewer-canvas"></div>
+        
+        {/* Viewer Controls Sidebar */}
+        <div className="viewer-sidebar">
+          <button 
+            className={`viewer-btn ${wireframe ? 'active' : ''}`}
+            onClick={toggleWireframe}
+            title="Toggle Wireframe"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          
+          <button 
+            className={`viewer-btn ${autoRotate ? 'active' : ''}`}
+            onClick={() => setAutoRotate(!autoRotate)}
+            title="Toggle Auto-Rotate"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          
+          <button 
+            className="viewer-btn"
+            onClick={resetCamera}
+            title="Reset Camera"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M15 10l-4 4l6 6l4-16l-16 4l6 6l4-4z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          
+          <div className="viewer-divider"></div>
+          
+          <div className="slice-control">
+            <button 
+              className={`viewer-btn ${sliceHeight !== null ? 'active' : ''}`}
+              onClick={() => setSliceHeight(sliceHeight === null ? modelHeight : null)}
+              title="Toggle Slice View"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 12h18M3 6h18M3 18h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </button>
+            {sliceHeight !== null && (
+              <input
+                type="range"
+                min="0"
+                max={modelHeight}
+                value={sliceHeight}
+                onChange={(e) => setSliceHeight(Number(e.target.value))}
+                className="slice-slider"
+                title={`Height: ${sliceHeight.toFixed(1)}mm`}
+              />
+            )}
+          </div>
+        </div>
         
         {loading && (
           <div className="viewer-loading">

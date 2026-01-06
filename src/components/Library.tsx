@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './Library.css';
 import ModelViewer from './ModelViewer';
+import TagsInput from './TagsInput';
 import Toast from './Toast';
 import LoadingScreen from './LoadingScreen';
 
@@ -39,6 +40,17 @@ const Library: React.FC<LibraryProps> = ({ userRole }) => {
   const [autoTaggingAll, setAutoTaggingAll] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set());
+  const [bulkTagsModal, setBulkTagsModal] = useState(false);
+  const [bulkTags, setBulkTags] = useState('');
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkTagging, setBulkTagging] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterType, setFilterType] = useState<string>('all');
+  const [filterSizeMin, setFilterSizeMin] = useState<number | ''>('');
+  const [filterSizeMax, setFilterSizeMax] = useState<number | ''>('');
+  const [sortBy, setSortBy] = useState<'date' | 'name' | 'size'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   
   const isAdmin = userRole === 'admin';
 
@@ -59,15 +71,37 @@ const Library: React.FC<LibraryProps> = ({ userRole }) => {
     fetchFiles();
   }, []);
 
-  // Filter files based on search query
-  const filteredFiles = files.filter(file => {
-    const query = searchQuery.toLowerCase();
-    return (
-      file.originalName.toLowerCase().includes(query) ||
-      file.description.toLowerCase().includes(query) ||
-      file.tags.toLowerCase().includes(query)
-    );
-  });
+  // Filter files based on search query and filters
+  const filteredFiles = files
+    .filter(file => {
+      const query = searchQuery.toLowerCase();
+      const matchesQuery = !query || 
+        file.originalName.toLowerCase().includes(query) ||
+        file.description.toLowerCase().includes(query) ||
+        file.tags.toLowerCase().includes(query);
+      
+      const matchesType = filterType === 'all' || file.fileType === filterType;
+      
+      const matchesSizeMin = !filterSizeMin || file.fileSize >= filterSizeMin * 1024 * 1024;
+      const matchesSizeMax = !filterSizeMax || file.fileSize <= filterSizeMax * 1024 * 1024;
+      
+      return matchesQuery && matchesType && matchesSizeMin && matchesSizeMax;
+    })
+    .sort((a, b) => {
+      let comparison = 0;
+      switch (sortBy) {
+        case 'name':
+          comparison = a.originalName.localeCompare(b.originalName);
+          break;
+        case 'size':
+          comparison = a.fileSize - b.fileSize;
+          break;
+        case 'date':
+        default:
+          comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      }
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
 
   // Pagination
   const totalPages = Math.ceil(filteredFiles.length / itemsPerPage);
@@ -216,6 +250,93 @@ const Library: React.FC<LibraryProps> = ({ userRole }) => {
       setToast({ message: 'Delete failed: ' + (err instanceof Error ? err.message : 'Unknown error'), type: 'error' });
     } finally {
       setDeleteConfirm(null);
+    }
+  };
+
+  // Bulk operations
+  const toggleSelectFile = (id: number) => {
+    const newSelected = new Set(selectedFiles);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedFiles(newSelected);
+  };
+
+  const selectAllVisible = () => {
+    if (selectedFiles.size === paginatedFiles.length) {
+      setSelectedFiles(new Set());
+    } else {
+      setSelectedFiles(new Set(paginatedFiles.map(f => f.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Delete ${selectedFiles.size} selected files? This cannot be undone.`)) return;
+    
+    try {
+      setBulkDeleting(true);
+      let success = 0;
+      let failed = 0;
+      
+      for (const id of selectedFiles) {
+        try {
+          const response = await fetch(`/api/library/${id}`, { method: 'DELETE' });
+          if (response.ok) success++;
+          else failed++;
+        } catch {
+          failed++;
+        }
+      }
+      
+      setToast({ 
+        message: `Deleted ${success} files${failed > 0 ? `, ${failed} failed` : ''}`, 
+        type: failed > 0 ? 'error' : 'success' 
+      });
+      setSelectedFiles(new Set());
+      fetchFiles();
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const handleBulkAddTags = async () => {
+    const tagsArray = bulkTags.split(',').map(t => t.trim()).filter(t => t.length > 0);
+    if (tagsArray.length === 0) {
+      setToast({ message: 'Please enter at least one tag', type: 'error' });
+      return;
+    }
+    
+    try {
+      setBulkTagging(true);
+      let success = 0;
+      
+      for (const fileId of selectedFiles) {
+        try {
+          // Get existing tags for this file
+          const file = files.find(f => f.id === fileId);
+          const existingTags = file?.tags ? file.tags.split(',').map(t => t.trim()) : [];
+          const allTags = [...new Set([...existingTags, ...tagsArray])];
+          
+          const response = await fetch(`/api/library/${fileId}/tags`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tags: allTags })
+          });
+          if (response.ok) success++;
+        } catch {
+          // Continue on error
+        }
+      }
+      
+      setToast({ message: `Added tags to ${success} files`, type: 'success' });
+      setBulkTagsModal(false);
+      setBulkTags('');
+      setSelectedFiles(new Set());
+      fetchFiles();
+    } finally {
+      setBulkTagging(false);
     }
   };
 
@@ -409,16 +530,15 @@ const Library: React.FC<LibraryProps> = ({ userRole }) => {
               </div>
               
               <div className="form-group">
-                <label>Tags (comma-separated)</label>
-                <input
-                  type="text"
+                <label>Tags</label>
+                <TagsInput
                   value={editTags}
-                  onChange={(e) => setEditTags(e.target.value)}
-                  placeholder="e.g. functional, miniature, prototype"
+                  onChange={setEditTags}
                   disabled={saving || autoTagging}
+                  placeholder="Add tags..."
                 />
                 <small style={{ color: '#888', fontSize: '0.85rem', marginTop: '0.25rem', display: 'block' }}>
-                  Separate tags with commas. Tags help organize and search your models.
+                  Type and press Enter or comma to add. Click × to remove.
                 </small>
               </div>
               
@@ -459,7 +579,72 @@ const Library: React.FC<LibraryProps> = ({ userRole }) => {
         </div>
       </div>
 
+      {/* Bulk Action Bar */}
+      {selectedFiles.size > 0 && (
+        <div className="bulk-action-bar">
+          <span className="bulk-count">{selectedFiles.size} selected</span>
+          <div className="bulk-actions">
+            <button 
+              onClick={() => setBulkTagsModal(true)} 
+              className="btn-bulk"
+              disabled={bulkDeleting}
+            >
+              🏷️ Add Tags
+            </button>
+            <button 
+              onClick={handleBulkDelete} 
+              className="btn-bulk btn-bulk-danger"
+              disabled={bulkDeleting}
+            >
+              {bulkDeleting ? '🗑️ Deleting...' : '🗑️ Delete'}
+            </button>
+            <button 
+              onClick={() => setSelectedFiles(new Set())} 
+              className="btn-bulk btn-bulk-secondary"
+            >
+              ✕ Clear Selection
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Tags Modal */}
+      {bulkTagsModal && (
+        <div className="modal-overlay" onClick={() => setBulkTagsModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>🏷️ Add Tags to {selectedFiles.size} Files</h2>
+              <button className="modal-close" onClick={() => setBulkTagsModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Tags to add</label>
+                <TagsInput
+                  value={bulkTags}
+                  onChange={setBulkTags}
+                  disabled={bulkTagging}
+                  placeholder="Add tags to apply..."
+                />
+              </div>
+              <div className="modal-actions">
+                <button onClick={() => setBulkTagsModal(false)} className="btn-secondary">Cancel</button>
+                <button onClick={handleBulkAddTags} className="btn-primary" disabled={bulkTagging}>
+                  {bulkTagging ? 'Adding...' : 'Add Tags'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="search-bar">
+        <button 
+          onClick={selectAllVisible} 
+          className="btn-select-all"
+          title={selectedFiles.size === paginatedFiles.length ? 'Deselect All' : 'Select All'}
+        >
+          {selectedFiles.size === paginatedFiles.length && paginatedFiles.length > 0 ? '☑' : '☐'}
+        </button>
         <input
           type="text"
           value={searchQuery}
@@ -467,6 +652,13 @@ const Library: React.FC<LibraryProps> = ({ userRole }) => {
           placeholder="🔍 Search by filename, description, or tags..."
           className="search-input"
         />
+        <button 
+          onClick={() => setShowFilters(!showFilters)} 
+          className={`btn-filter-toggle ${showFilters ? 'active' : ''}`}
+          title="Toggle Filters"
+        >
+          🔧 Filters
+        </button>
         {searchQuery && (
           <button 
             onClick={() => setSearchQuery('')} 
@@ -476,6 +668,72 @@ const Library: React.FC<LibraryProps> = ({ userRole }) => {
           </button>
         )}
       </div>
+
+      {/* Advanced Filters */}
+      {showFilters && (
+        <div className="filters-panel">
+          <div className="filter-group">
+            <label>File Type</label>
+            <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+              <option value="all">All Types</option>
+              <option value="3mf">3MF</option>
+              <option value="stl">STL</option>
+              <option value="gcode">G-code</option>
+            </select>
+          </div>
+          
+          <div className="filter-group">
+            <label>Size (MB)</label>
+            <div className="filter-range">
+              <input
+                type="number"
+                placeholder="Min"
+                value={filterSizeMin}
+                onChange={(e) => setFilterSizeMin(e.target.value ? Number(e.target.value) : '')}
+                min="0"
+              />
+              <span>to</span>
+              <input
+                type="number"
+                placeholder="Max"
+                value={filterSizeMax}
+                onChange={(e) => setFilterSizeMax(e.target.value ? Number(e.target.value) : '')}
+                min="0"
+              />
+            </div>
+          </div>
+          
+          <div className="filter-group">
+            <label>Sort By</label>
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'date' | 'name' | 'size')}>
+              <option value="date">Date Added</option>
+              <option value="name">Name</option>
+              <option value="size">File Size</option>
+            </select>
+          </div>
+          
+          <div className="filter-group">
+            <label>Order</label>
+            <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}>
+              <option value="desc">Descending</option>
+              <option value="asc">Ascending</option>
+            </select>
+          </div>
+          
+          <button 
+            className="btn-clear-filters"
+            onClick={() => {
+              setFilterType('all');
+              setFilterSizeMin('');
+              setFilterSizeMax('');
+              setSortBy('date');
+              setSortOrder('desc');
+            }}
+          >
+            Clear Filters
+          </button>
+        </div>
+      )}
 
       <div className="library-actions">
         <div 
@@ -533,7 +791,17 @@ const Library: React.FC<LibraryProps> = ({ userRole }) => {
           </div>
         ) : (
           paginatedFiles.map(file => (
-            <div key={file.id} className="file-card">
+            <div key={file.id} className={`file-card ${selectedFiles.has(file.id) ? 'selected' : ''}`}>
+              {/* Selection checkbox */}
+              <label className="file-select-checkbox" onClick={e => e.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  checked={selectedFiles.has(file.id)}
+                  onChange={() => toggleSelectFile(file.id)}
+                />
+                <span className="checkmark"></span>
+              </label>
+              
               <div 
                 className="file-preview" 
                 onClick={() => handleView3D(file)}

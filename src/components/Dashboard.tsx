@@ -7,13 +7,15 @@ import Duplicates from './Duplicates';
 import Settings from './Settings';
 import UserManagement from './UserManagement';
 import BuyMeACoffee from './BuyMeACoffee';
+import DashboardHome from './DashboardHome';
+import Maintenance from './Maintenance';
 import './Dashboard.css';
 
 interface DashboardProps {
   onLogout: () => void;
 }
 
-type Tab = 'printers' | 'history' | 'statistics' | 'library' | 'duplicates' | 'settings' | 'users';
+type Tab = 'home' | 'printers' | 'history' | 'statistics' | 'library' | 'duplicates' | 'maintenance' | 'settings' | 'users';
 
 interface UserInfo {
   username: string;
@@ -25,7 +27,7 @@ interface UserInfo {
 function Dashboard({ onLogout }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const savedTab = localStorage.getItem('activeTab');
-    return (savedTab as Tab) || 'printers';
+    return (savedTab as Tab) || 'home';
   });
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -75,6 +77,11 @@ function Dashboard({ onLogout }: DashboardProps) {
   const isAdmin = userInfo?.role === 'admin' || userInfo?.role === 'superadmin';
 
   const navItems = [
+    { id: 'home' as Tab, label: 'Home', icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    )},
     { id: 'printers' as Tab, label: 'Printers', icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect x="4" y="4" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="2" />
@@ -99,6 +106,11 @@ function Dashboard({ onLogout }: DashboardProps) {
     { id: 'duplicates' as Tab, label: 'Duplicates', icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    )},
+    { id: 'maintenance' as Tab, label: 'Maintenance', icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     )},
   ];
@@ -217,11 +229,13 @@ function Dashboard({ onLogout }: DashboardProps) {
       {/* Main Content */}
       <main className="dashboard-content">
         <div className="content-wrapper">
+          {activeTab === 'home' && <DashboardHome onNavigate={(tab) => handleTabChange(tab as Tab)} />}
           {activeTab === 'printers' && <Printers />}
           {activeTab === 'history' && <PrintHistory />}
           {activeTab === 'statistics' && <Statistics />}
           {activeTab === 'library' && <Library userRole={userInfo?.role} />}
           {activeTab === 'duplicates' && <Duplicates />}
+          {activeTab === 'maintenance' && <Maintenance />}
           {isAdmin && activeTab === 'users' && <UserManagement />}
           {isAdmin && activeTab === 'settings' && <Settings />}
         </div>

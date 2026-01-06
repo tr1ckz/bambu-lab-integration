@@ -169,6 +169,23 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_problems_print ON problems(print_id);
   CREATE INDEX IF NOT EXISTS idx_problems_type ON problems(problem_type);
   CREATE INDEX IF NOT EXISTS idx_problems_resolved ON problems(resolved_at);
+
+  CREATE TABLE IF NOT EXISTS maintenance_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    printer_id TEXT,
+    task_name TEXT NOT NULL,
+    task_type TEXT NOT NULL,
+    description TEXT,
+    interval_hours INTEGER DEFAULT 100,
+    last_performed DATETIME,
+    next_due DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_maintenance_printer ON maintenance_tasks(printer_id);
+  CREATE INDEX IF NOT EXISTS idx_maintenance_next_due ON maintenance_tasks(next_due);
+  CREATE INDEX IF NOT EXISTS idx_maintenance_type ON maintenance_tasks(task_type);
 `);
 
 // Migration: Move settings to global config table

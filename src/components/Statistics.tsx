@@ -16,8 +16,23 @@ interface StatisticsData {
   averagePrintTime: number;
 }
 
+interface CostData {
+  totalCost: number;
+  filamentCost: number;
+  electricityCost: number;
+  filamentUsedKg: number;
+  printTimeHours: number;
+  currency: string;
+  settings: {
+    filamentCostPerKg: number;
+    electricityCostPerKwh: number;
+    printerWattage: number;
+  };
+}
+
 const Statistics: React.FC = () => {
   const [stats, setStats] = useState<StatisticsData | null>(null);
+  const [costs, setCosts] = useState<CostData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -26,11 +41,20 @@ const Statistics: React.FC = () => {
       setLoading(true);
       setError('');
       
-      const response = await fetch('/api/statistics');
-      if (!response.ok) throw new Error('Failed to fetch statistics');
+      const [statsRes, costsRes] = await Promise.all([
+        fetch('/api/statistics'),
+        fetch('/api/statistics/costs')
+      ]);
       
-      const data = await response.json();
-      setStats(data);
+      if (!statsRes.ok) throw new Error('Failed to fetch statistics');
+      
+      const statsData = await statsRes.json();
+      setStats(statsData);
+      
+      if (costsRes.ok) {
+        const costsData = await costsRes.json();
+        setCosts(costsData);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load statistics');
     } finally {
@@ -160,6 +184,61 @@ const Statistics: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Cost Calculator Section */}
+      {costs && (
+        <div className="cost-section">
+          <h2>💰 Cost Calculator</h2>
+          <div className="cost-grid">
+            <div className="cost-card total">
+              <div className="cost-icon">💵</div>
+              <div className="cost-content">
+                <div className="cost-value">
+                  {costs.currency === 'USD' ? '$' : costs.currency === 'EUR' ? '€' : costs.currency === 'GBP' ? '£' : ''}
+                  {costs.totalCost.toFixed(2)}
+                </div>
+                <div className="cost-label">Total Cost</div>
+              </div>
+            </div>
+            
+            <div className="cost-card">
+              <div className="cost-icon">🧵</div>
+              <div className="cost-content">
+                <div className="cost-value">
+                  {costs.currency === 'USD' ? '$' : costs.currency === 'EUR' ? '€' : costs.currency === 'GBP' ? '£' : ''}
+                  {costs.filamentCost.toFixed(2)}
+                </div>
+                <div className="cost-label">Filament Cost</div>
+                <div className="cost-detail">{costs.filamentUsedKg.toFixed(2)}kg used</div>
+              </div>
+            </div>
+            
+            <div className="cost-card">
+              <div className="cost-icon">⚡</div>
+              <div className="cost-content">
+                <div className="cost-value">
+                  {costs.currency === 'USD' ? '$' : costs.currency === 'EUR' ? '€' : costs.currency === 'GBP' ? '£' : ''}
+                  {costs.electricityCost.toFixed(2)}
+                </div>
+                <div className="cost-label">Electricity Cost</div>
+                <div className="cost-detail">{costs.printTimeHours.toFixed(0)}h total</div>
+              </div>
+            </div>
+            
+            <div className="cost-card settings">
+              <div className="cost-content">
+                <div className="cost-label">Current Settings</div>
+                <div className="cost-settings">
+                  <span>Filament: {costs.settings.filamentCostPerKg}/{costs.currency}/kg</span>
+                  <span>Electricity: {costs.settings.electricityCostPerKwh}/{costs.currency}/kWh</span>
+                  <span>Printer: {costs.settings.printerWattage}W</span>
+                </div>
+                <div className="cost-hint">Configure in Settings → Cost Calculator</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="details-grid">
         <div className="detail-card">

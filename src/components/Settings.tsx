@@ -57,6 +57,13 @@ function Settings() {
   const [userProfile, setUserProfile] = useState({ username: '', email: '', displayName: '', oauthProvider: 'none' });
   const [profileLoading, setProfileLoading] = useState(false);
   
+  // Cost calculator state
+  const [filamentCostPerKg, setFilamentCostPerKg] = useState(25);
+  const [electricityCostPerKwh, setElectricityCostPerKwh] = useState(0.12);
+  const [printerWattage, setPrinterWattage] = useState(150);
+  const [costCurrency, setCostCurrency] = useState('USD');
+  const [costLoading, setCostLoading] = useState(false);
+  
   // System state
   const [restarting, setRestarting] = useState(false);
   const [confirmRestart, setConfirmRestart] = useState(false);
@@ -72,6 +79,7 @@ function Settings() {
     loadUiSettings();
     loadWatchdogSettings();
     loadUserProfile();
+    loadCostSettings();
   }, []);
 
   useEffect(() => {
@@ -244,6 +252,46 @@ function Settings() {
       setToast({ message: 'Failed to update profile', type: 'error' });
     } finally {
       setProfileLoading(false);
+    }
+  };
+
+  const loadCostSettings = async () => {
+    try {
+      const response = await fetch('/api/settings/costs');
+      const data = await response.json();
+      if (!response.ok) return;
+      setFilamentCostPerKg(data.filamentCostPerKg ?? 25);
+      setElectricityCostPerKwh(data.electricityCostPerKwh ?? 0.12);
+      setPrinterWattage(data.printerWattage ?? 150);
+      setCostCurrency(data.currency ?? 'USD');
+    } catch (error) {
+      console.error('Failed to load cost settings:', error);
+    }
+  };
+
+  const handleSaveCostSettings = async () => {
+    setCostLoading(true);
+    try {
+      const response = await fetch('/api/settings/costs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filamentCostPerKg,
+          electricityCostPerKwh,
+          printerWattage,
+          currency: costCurrency
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setToast({ message: 'Cost settings saved!', type: 'success' });
+      } else {
+        setToast({ message: 'Failed to save cost settings', type: 'error' });
+      }
+    } catch (error) {
+      setToast({ message: 'Failed to save cost settings', type: 'error' });
+    } finally {
+      setCostLoading(false);
     }
   };
 
@@ -967,6 +1015,88 @@ function Settings() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Cost Calculator Section */}
+      <div className="settings-section">
+        <h2>Cost Calculator</h2>
+        <p className="form-description">
+          Configure costs to track printing expenses in the Statistics page
+        </p>
+        
+        <div className="form-group">
+          <label>Currency</label>
+          <select
+            value={costCurrency}
+            onChange={(e) => setCostCurrency(e.target.value)}
+            disabled={costLoading}
+          >
+            <option value="USD">USD ($)</option>
+            <option value="EUR">EUR (€)</option>
+            <option value="GBP">GBP (£)</option>
+            <option value="CAD">CAD ($)</option>
+            <option value="AUD">AUD ($)</option>
+            <option value="JPY">JPY (¥)</option>
+            <option value="CNY">CNY (¥)</option>
+          </select>
+        </div>
+        
+        <div className="form-group">
+          <label>Filament Cost per kg</label>
+          <input
+            type="number"
+            value={filamentCostPerKg}
+            onChange={(e) => setFilamentCostPerKg(parseFloat(e.target.value) || 0)}
+            placeholder="25"
+            min="0"
+            step="0.01"
+            disabled={costLoading}
+          />
+          <small style={{ color: 'rgba(255,255,255,0.5)', display: 'block', marginTop: '0.5rem' }}>
+            Average cost per kilogram of filament
+          </small>
+        </div>
+        
+        <div className="form-group">
+          <label>Electricity Cost per kWh</label>
+          <input
+            type="number"
+            value={electricityCostPerKwh}
+            onChange={(e) => setElectricityCostPerKwh(parseFloat(e.target.value) || 0)}
+            placeholder="0.12"
+            min="0"
+            step="0.001"
+            disabled={costLoading}
+          />
+          <small style={{ color: 'rgba(255,255,255,0.5)', display: 'block', marginTop: '0.5rem' }}>
+            Your electricity rate per kilowatt-hour
+          </small>
+        </div>
+        
+        <div className="form-group">
+          <label>Printer Power Usage (Watts)</label>
+          <input
+            type="number"
+            value={printerWattage}
+            onChange={(e) => setPrinterWattage(parseInt(e.target.value) || 0)}
+            placeholder="150"
+            min="0"
+            step="1"
+            disabled={costLoading}
+          />
+          <small style={{ color: 'rgba(255,255,255,0.5)', display: 'block', marginTop: '0.5rem' }}>
+            Average power consumption of your printer (typically 100-200W)
+          </small>
+        </div>
+        
+        <button 
+          type="button" 
+          className="btn btn-primary" 
+          onClick={handleSaveCostSettings}
+          disabled={costLoading}
+        >
+          {costLoading ? 'Saving...' : 'Save Cost Settings'}
+        </button>
       </div>
 
       {/* Watchdog Section */}

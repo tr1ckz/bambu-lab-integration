@@ -3123,6 +3123,289 @@ app.post('/api/settings/save-oauth', requireAdmin, async (req, res) => {
   }
 });
 
+// Get cost settings
+app.get('/api/settings/costs', (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  try {
+    const settings = {};
+    const keys = ['filamentCostPerKg', 'electricityCostPerKwh', 'printerWattage', 'currency'];
+    
+    for (const key of keys) {
+      const row = db.prepare('SELECT value FROM config WHERE key = ?').get(`cost_${key}`);
+      settings[key] = row ? parseFloat(row.value) || row.value : null;
+    }
+    
+    // Defaults
+    settings.filamentCostPerKg = settings.filamentCostPerKg ?? 25;
+    settings.electricityCostPerKwh = settings.electricityCostPerKwh ?? 0.12;
+    settings.printerWattage = settings.printerWattage ?? 150;
+    settings.currency = settings.currency ?? 'USD';
+    
+    res.json(settings);
+  } catch (error) {
+    console.error('Get cost settings error:', error);
+    res.status(500).json({ error: 'Failed to get cost settings' });
+  }
+});
+
+// Save cost settings
+app.post('/api/settings/costs', requireAdmin, (req, res) => {
+  const { filamentCostPerKg, electricityCostPerKwh, printerWattage, currency } = req.body;
+  
+  try {
+    const upsert = db.prepare(`
+      INSERT INTO config (key, value, updated_at) 
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = CURRENT_TIMESTAMP
+    `);
+    
+    upsert.run('cost_filamentCostPerKg', filamentCostPerKg, filamentCostPerKg);
+    upsert.run('cost_electricityCostPerKwh', electricityCostPerKwh, electricityCostPerKwh);
+    upsert.run('cost_printerWattage', printerWattage, printerWattage);
+    upsert.run('cost_currency', currency, currency);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Save cost settings error:', error);
+    res.status(500).json({ error: 'Failed to save cost settings' });
+  }
+});
+
+// Calculate costs for prints
+app.get('/api/statistics/costs', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  try {
+    // Get cost settings
+    const getCostSetting = (key, defaultValue) => {
+      const row = db.prepare('SELECT value FROM config WHERE key = ?').get(`cost_${key}`);
+      return row ? parseFloat(row.value) || defaultValue : defaultValue;
+    };
+    
+    const filamentCostPerKg = getCostSetting('filamentCostPerKg', 25);
+    const electricityCostPerKwh = getCostSetting('electricityCostPerKwh', 0.12);
+    const printerWattage = getCostSetting('printerWattage', 150);
+    const currency = db.prepare('SELECT value FROM config WHERE key = ?').get('cost_currency')?.value || 'USD';
+    
+    // Get all successful prints
+    const prints = db.prepare(`
+      SELECT weight, costTime 
+      FROM prints 
+      WHERE status = 2 AND (weight > 0 OR costTime > 0)
+    `).all();
+    
+    let totalFilamentCost = 0;
+    let totalElectricityCost = 0;
+    let totalFilamentGrams = 0;
+    let totalPrintHours = 0;
+    
+    for (const print of prints) {
+      // Filament cost (weight is in grams)
+      if (print.weight) {
+        const kgUsed = print.weight / 1000;
+        totalFilamentCost += kgUsed * filamentCostPerKg;
+        totalFilamentGrams += print.weight;
+      }
+      
+      // Electricity cost (costTime is in seconds)
+      if (print.costTime) {
+        const hours = print.costTime / 3600;
+        const kwhUsed = (printerWattage / 1000) * hours;
+        totalElectricityCost += kwhUsed * electricityCostPerKwh;
+        totalPrintHours += hours;
+      }
+    }
+    
+    res.json({
+      totalCost: totalFilamentCost + totalElectricityCost,
+      filamentCost: totalFilamentCost,
+      electricityCost: totalElectricityCost,
+      filamentUsedKg: totalFilamentGrams / 1000,
+      printTimeHours: totalPrintHours,
+      currency,
+      settings: {
+        filamentCostPerKg,
+        electricityCostPerKwh,
+        printerWattage
+      }
+    });
+  } catch (error) {
+    console.error('Calculate costs error:', error);
+    res.status(500).json({ error: 'Failed to calculate costs' });
+  }
+});
+
+// Maintenance Tasks API
+app.get('/api/maintenance', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  try {
+    const tasks = db.prepare(`
+      SELECT * FROM maintenance_tasks 
+      ORDER BY next_due ASC NULLS LAST, task_name ASC
+    `).all();
+    
+    // Check for overdue tasks
+    const now = new Date().toISOString();
+    const tasksWithStatus = tasks.map(task => ({
+      ...task,
+      isOverdue: task.next_due && task.next_due < now,
+      isDueSoon: task.next_due && !task.isOverdue && new Date(task.next_due) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    }));
+    
+    res.json(tasksWithStatus);
+  } catch (error) {
+    console.error('Get maintenance tasks error:', error);
+    res.status(500).json({ error: 'Failed to get maintenance tasks' });
+  }
+});
+
+app.post('/api/maintenance', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
+  if (!user || user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  try {
+    const { printer_id, task_name, task_type, description, interval_hours } = req.body;
+    
+    if (!task_name || !task_type) {
+      return res.status(400).json({ error: 'Task name and type are required' });
+    }
+    
+    const result = db.prepare(`
+      INSERT INTO maintenance_tasks (printer_id, task_name, task_type, description, interval_hours)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(printer_id || null, task_name, task_type, description || '', interval_hours || 100);
+    
+    const task = db.prepare('SELECT * FROM maintenance_tasks WHERE id = ?').get(result.lastInsertRowid);
+    
+    res.json({ success: true, task });
+  } catch (error) {
+    console.error('Create maintenance task error:', error);
+    res.status(500).json({ error: 'Failed to create maintenance task' });
+  }
+});
+
+app.put('/api/maintenance/:id', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
+  if (!user || user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  try {
+    const { id } = req.params;
+    const { printer_id, task_name, task_type, description, interval_hours } = req.body;
+    
+    db.prepare(`
+      UPDATE maintenance_tasks 
+      SET printer_id = ?, task_name = ?, task_type = ?, description = ?, interval_hours = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(printer_id || null, task_name, task_type, description || '', interval_hours || 100, id);
+    
+    const task = db.prepare('SELECT * FROM maintenance_tasks WHERE id = ?').get(id);
+    
+    res.json({ success: true, task });
+  } catch (error) {
+    console.error('Update maintenance task error:', error);
+    res.status(500).json({ error: 'Failed to update maintenance task' });
+  }
+});
+
+app.delete('/api/maintenance/:id', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
+  if (!user || user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  try {
+    const { id } = req.params;
+    db.prepare('DELETE FROM maintenance_tasks WHERE id = ?').run(id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete maintenance task error:', error);
+    res.status(500).json({ error: 'Failed to delete maintenance task' });
+  }
+});
+
+app.post('/api/maintenance/:id/complete', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  try {
+    const { id } = req.params;
+    const task = db.prepare('SELECT * FROM maintenance_tasks WHERE id = ?').get(id);
+    
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    const now = new Date();
+    const nextDue = new Date(now.getTime() + task.interval_hours * 60 * 60 * 1000);
+    
+    db.prepare(`
+      UPDATE maintenance_tasks 
+      SET last_performed = ?, next_due = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(now.toISOString(), nextDue.toISOString(), id);
+    
+    const updatedTask = db.prepare('SELECT * FROM maintenance_tasks WHERE id = ?').get(id);
+    
+    res.json({ success: true, task: updatedTask });
+  } catch (error) {
+    console.error('Complete maintenance task error:', error);
+    res.status(500).json({ error: 'Failed to complete maintenance task' });
+  }
+});
+
+// Get maintenance summary/stats
+app.get('/api/maintenance/summary', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  try {
+    const now = new Date().toISOString();
+    const weekFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    
+    const total = db.prepare('SELECT COUNT(*) as count FROM maintenance_tasks').get().count;
+    const overdue = db.prepare('SELECT COUNT(*) as count FROM maintenance_tasks WHERE next_due < ?').get(now).count;
+    const dueSoon = db.prepare('SELECT COUNT(*) as count FROM maintenance_tasks WHERE next_due >= ? AND next_due <= ?').get(now, weekFromNow).count;
+    const neverDone = db.prepare('SELECT COUNT(*) as count FROM maintenance_tasks WHERE last_performed IS NULL').get().count;
+    
+    res.json({
+      total,
+      overdue,
+      dueSoon,
+      neverDone,
+      upToDate: total - overdue - dueSoon - neverDone
+    });
+  } catch (error) {
+    console.error('Get maintenance summary error:', error);
+    res.status(500).json({ error: 'Failed to get maintenance summary' });
+  }
+});
+
 // Admin: Restart/Reboot the application
 app.post('/api/settings/restart', async (req, res) => {
   if (!req.session.authenticated) {

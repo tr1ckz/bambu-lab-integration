@@ -722,4 +722,245 @@
   .files-grid {
     grid-template-columns: 1fr;
   }
+  
+  .bulk-action-bar {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .bulk-actions {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Bulk Operations */
+.bulk-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  background: linear-gradient(135deg, #00d4ff22 0%, #0099ff22 100%);
+  border: 1px solid #00d4ff44;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+}
+
+.bulk-count {
+  font-weight: 600;
+  color: #00d4ff;
+  font-size: 1rem;
+}
+
+.bulk-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.btn-bulk {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 8px;
+  background: rgba(0, 212, 255, 0.2);
+  color: #00d4ff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-bulk:hover {
+  background: rgba(0, 212, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-bulk-danger {
+  background: rgba(255, 68, 68, 0.2);
+  color: #ff4444;
+}
+
+.btn-bulk-danger:hover {
+  background: rgba(255, 68, 68, 0.3);
+}
+
+.btn-bulk-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: #888;
+}
+
+.btn-bulk-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+.btn-bulk:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Select All Button */
+.btn-select-all {
+  padding: 0.75rem 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #888;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-select-all:hover {
+  border-color: #00d4ff;
+  color: #00d4ff;
+  background: rgba(0, 212, 255, 0.1);
+}
+
+/* File Card Selection */
+.file-card {
+  position: relative;
+}
+
+.file-card.selected {
+  border-color: #00d4ff;
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+}
+
+.file-select-checkbox {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 10;
+  cursor: pointer;
+}
+
+.file-select-checkbox input {
+  display: none;
+}
+
+.file-select-checkbox .checkmark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.5);
+  transition: all 0.2s ease;
+}
+
+.file-select-checkbox .checkmark::after {
+  content: '';
+  display: none;
+  width: 6px;
+  height: 10px;
+  border: solid #00d4ff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.file-select-checkbox input:checked + .checkmark {
+  background: #00d4ff;
+  border-color: #00d4ff;
+}
+
+.file-select-checkbox input:checked + .checkmark::after {
+  display: block;
+  border-color: white;
+}
+
+.file-card:hover .file-select-checkbox .checkmark {
+  border-color: #00d4ff;
+}
+
+/* Advanced Filters */
+.btn-filter-toggle {
+  padding: 0.75rem 1.25rem;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #888;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-filter-toggle:hover,
+.btn-filter-toggle.active {
+  border-color: #00d4ff;
+  color: #00d4ff;
+  background: rgba(0, 212, 255, 0.1);
+}
+
+.filters-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  align-items: flex-end;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.filter-group label {
+  font-size: 0.85rem;
+  color: #888;
+  font-weight: 600;
+}
+
+.filter-group select,
+.filter-group input {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  color: white;
+  font-size: 0.9rem;
+  min-width: 120px;
+}
+
+.filter-group select:focus,
+.filter-group input:focus {
+  outline: none;
+  border-color: #00d4ff;
+}
+
+.filter-range {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-range input {
+  width: 70px;
+  min-width: 70px;
+}
+
+.filter-range span {
+  color: #666;
+}
+
+.btn-clear-filters {
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #888;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-clear-filters:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
 }

@@ -1,0 +1,118 @@
+.tags-input-container {
+  position: relative;
+}
+
+.tags-input-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #1e1e1e;
+  border: 2px solid #333;
+  border-radius: 8px;
+  min-height: 44px;
+  align-items: center;
+  transition: border-color 0.2s ease;
+}
+
+.tags-input-wrapper:focus-within {
+  border-color: #00d4ff;
+}
+
+.tags-input-wrapper.disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: linear-gradient(135deg, #00d4ff22, #0099ff22);
+  border: 1px solid #00d4ff44;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #00d4ff;
+  font-weight: 500;
+}
+
+.tag-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #00d4ff;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.tag-remove:hover {
+  background: #00d4ff33;
+  color: white;
+}
+
+.tags-input-field {
+  flex: 1;
+  min-width: 100px;
+  border: none;
+  background: transparent;
+  color: white;
+  font-size: 0.95rem;
+  outline: none;
+  padding: 4px 0;
+}
+
+.tags-input-field::placeholder {
+  color: #666;
+}
+
+.tags-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
+  z-index: 100;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.suggestion-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: white;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.suggestion-item:hover,
+.suggestion-item.selected {
+  background: #00d4ff22;
+}
+
+.suggestion-name {
+  font-weight: 500;
+}
+
+.suggestion-count {
+  font-size: 0.8rem;
+  color: #888;
+}
