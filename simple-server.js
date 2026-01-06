@@ -3811,12 +3811,14 @@ app.get('/api/settings/discord', async (req, res) => {
     const printerEnabled = getConfig.get('discord_printer_enabled');
     const maintenanceWebhook = getConfig.get('discord_maintenance_webhook');
     const maintenanceEnabled = getConfig.get('discord_maintenance_enabled');
+    const pingUserId = getConfig.get('discord_ping_user_id');
     
     res.json({
       printerWebhook: printerWebhook?.value || '',
       printerEnabled: printerEnabled?.value === 'true',
       maintenanceWebhook: maintenanceWebhook?.value || '',
-      maintenanceEnabled: maintenanceEnabled?.value === 'true'
+      maintenanceEnabled: maintenanceEnabled?.value === 'true',
+      pingUserId: pingUserId?.value || ''
     });
   } catch (error) {
     console.error('Error getting Discord settings:', error);
@@ -3837,7 +3839,7 @@ app.post('/api/settings/discord', async (req, res) => {
   }
   
   try {
-    const { printerWebhook, printerEnabled, maintenanceWebhook, maintenanceEnabled } = req.body;
+    const { printerWebhook, printerEnabled, maintenanceWebhook, maintenanceEnabled, pingUserId } = req.body;
     
     const upsert = db.prepare(`
       INSERT INTO config (key, value) VALUES (?, ?)
@@ -3848,6 +3850,7 @@ app.post('/api/settings/discord', async (req, res) => {
     upsert.run('discord_printer_enabled', printerEnabled ? 'true' : 'false');
     upsert.run('discord_maintenance_webhook', maintenanceWebhook || '');
     upsert.run('discord_maintenance_enabled', maintenanceEnabled ? 'true' : 'false');
+    upsert.run('discord_ping_user_id', pingUserId || '');
     
     res.json({ success: true, message: 'Discord settings saved!' });
   } catch (error) {
@@ -3898,12 +3901,15 @@ app.post('/api/discord/test', async (req, res) => {
       };
     }
     
+    // Use GitHub raw link for logo
+    const logoUrl = 'https://raw.githubusercontent.com/tr1ckz/PrintHive/refs/heads/main/public/images/logo.png';
+    
     const response = await fetch(webhook, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username: 'PrintHive',
-        avatar_url: 'https://cdn-icons-png.flaticon.com/512/3413/3413536.png',
+        avatar_url: logoUrl,
         embeds: [embed]
       })
     });
@@ -4004,12 +4010,26 @@ async function sendDiscordNotification(type, data) {
       if (data.dueAtHours !== undefined) embed.fields.push({ name: 'Due At', value: `${data.dueAtHours.toFixed(1)}h`, inline: true });
     }
     
+    // Get ping user ID if configured
+    const pingUserIdRow = getConfig.get('discord_ping_user_id');
+    const pingUserId = pingUserIdRow?.value || '';
+    const pingContent = pingUserId ? `<@${pingUserId}>` : '';
+    
+    // Get the base URL for the logo
+    const baseUrlRow = getConfig.get('base_url');
+    const baseUrl = baseUrlRow?.value || '';
+    const logoUrl = baseUrl ? `${baseUrl}/images/logo.png` : '';
+    
+    // Use GitHub raw link for logo
+    const logoUrl = 'https://raw.githubusercontent.com/tr1ckz/PrintHive/refs/heads/main/public/images/logo.png';
+    
     const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        content: pingContent || undefined,
         username: 'PrintHive',
-        avatar_url: 'https://cdn-icons-png.flaticon.com/512/3413/3413536.png',
+        avatar_url: logoUrl,
         embeds: [embed]
       })
     });

@@ -211,9 +211,7 @@ function Maintenance() {
   };
 
   const formatHours = (hours: number) => {
-    if (hours < 24) return `${hours} hours`;
-    const days = Math.floor(hours / 24);
-    return `${days} day${days > 1 ? 's' : ''}`;
+    return `${hours} print hours`;
   };
 
   const getTaskTypeInfo = (type: string) => {

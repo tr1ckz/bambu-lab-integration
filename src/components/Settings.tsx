@@ -64,6 +64,7 @@ function Settings({ userRole }: SettingsProps) {
   const [discordPrinterEnabled, setDiscordPrinterEnabled] = useState(false);
   const [discordMaintenanceWebhook, setDiscordMaintenanceWebhook] = useState('');
   const [discordMaintenanceEnabled, setDiscordMaintenanceEnabled] = useState(false);
+  const [discordPingUserId, setDiscordPingUserId] = useState('');
   const [discordLoading, setDiscordLoading] = useState(false);
   const [discordTesting, setDiscordTesting] = useState<string | null>(null);
   
@@ -245,6 +246,7 @@ function Settings({ userRole }: SettingsProps) {
       setDiscordPrinterEnabled(data.printerEnabled || false);
       setDiscordMaintenanceWebhook(data.maintenanceWebhook || '');
       setDiscordMaintenanceEnabled(data.maintenanceEnabled || false);
+      setDiscordPingUserId(data.pingUserId || '');
     } catch (error) {
       console.error('Failed to load Discord settings:', error);
     }
@@ -260,7 +262,8 @@ function Settings({ userRole }: SettingsProps) {
           printerWebhook: discordPrinterWebhook,
           printerEnabled: discordPrinterEnabled,
           maintenanceWebhook: discordMaintenanceWebhook,
-          maintenanceEnabled: discordMaintenanceEnabled
+          maintenanceEnabled: discordMaintenanceEnabled,
+          pingUserId: discordPingUserId
         })
       });
       const data = await response.json();
@@ -1326,6 +1329,24 @@ function Settings({ userRole }: SettingsProps) {
               </button>
             </div>
           )}
+        </div>
+
+        {/* Ping User ID */}
+        <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+          <label style={{ fontWeight: 500, color: '#fff', marginBottom: '0.5rem', display: 'block' }}>
+            Discord User ID to Ping (optional)
+          </label>
+          <small style={{ color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '0.75rem' }}>
+            Enter your Discord user ID to get pinged in notifications. Right-click your profile → Copy User ID
+          </small>
+          <input
+            type="text"
+            value={discordPingUserId}
+            onChange={(e) => setDiscordPingUserId(e.target.value)}
+            placeholder="e.g. 874822659161092166"
+            disabled={discordLoading}
+            style={{ maxWidth: '300px' }}
+          />
         </div>
         
         <button 
