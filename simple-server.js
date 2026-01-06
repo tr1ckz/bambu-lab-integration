@@ -904,25 +904,50 @@ app.post('/api/settings/profile', (req, res) => {
   }
 });
 
-// Match videos to prints based on timestamp
+// Global state for video matching background job
+let videoMatchJob = {
+  running: false,
+  total: 0,
+  processed: 0,
+  matched: 0,
+  unmatched: 0,
+  currentVideo: '',
+  startTime: null
+};
+
+// Global state for library scan background job
+let libraryScanJob = {
+  running: false,
+  total: 0,
+  processed: 0,
+  added: 0,
+  skipped: 0,
+  currentFile: '',
+  startTime: null
+};
+
+// Match videos to prints based on timestamp (non-blocking background job)
 app.post('/api/match-videos', (req, res) => {
   if (!req.session.authenticated) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
   
+  // Check if already running
+  if (videoMatchJob.running) {
+    return res.json({ 
+      success: false, 
+      message: 'Video matching job already running',
+      status: videoMatchJob
+    });
+  }
+  
   try {
-    const fs = require('fs');
     const videosDir = path.join(__dirname, 'data', 'videos');
     
     // Get all video files
     const videoFiles = fs.existsSync(videosDir) 
       ? fs.readdirSync(videosDir).filter(f => f.endsWith('.avi') || f.endsWith('.mp4'))
       : [];
-    
-    // Debug: Log some sample startTime values from prints
-    const samplePrints = db.prepare('SELECT id, title, startTime FROM prints WHERE startTime IS NOT NULL LIMIT 5').all();
-    console.log('Sample print startTime values:');
-    samplePrints.forEach(p => console.log(`  Print ${p.id}: ${p.startTime}`));
     
     // Get all prints that don't have videos yet
     const printsWithoutVideo = db.prepare(`
@@ -933,93 +958,143 @@ app.post('/api/match-videos', (req, res) => {
       ORDER BY startTime DESC
     `).all();
     
+    // Initialize job status
+    videoMatchJob = {
+      running: true,
+      total: videoFiles.length,
+      processed: 0,
+      matched: 0,
+      unmatched: 0,
+      currentVideo: '',
+      startTime: Date.now()
+    };
+    
+    console.log(`=== VIDEO MATCH: Starting background job for ${videoFiles.length} videos ===`);
     console.log(`Found ${printsWithoutVideo.length} prints without videos`);
-    console.log(`Found ${videoFiles.length} video files`);
     
-    let matched = 0;
-    let unmatched = 0;
-    const matchDetails = [];
-    
-    for (const videoFile of videoFiles) {
-      // Extract timestamp from filename: video_2024-12-13_15-18-02.avi
-      const match = videoFile.match(/video_(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})/);
-      
-      if (match) {
-        const [, date, hours, minutes, seconds] = match;
-        // Create a Date object from the video timestamp (local time)
-        const videoDate = new Date(`${date}T${hours}:${minutes}:${seconds}`);
-        const videoTimestampMs = videoDate.getTime();
-        
-        console.log(`Video: ${videoFile} -> Date: ${videoDate.toISOString()}`);
-        
-        // Find the best matching print
-        let bestMatch = null;
-        let bestTimeDiff = Infinity;
-        
-        for (const print of printsWithoutVideo) {
-          // Parse the print's startTime
-          let printDate;
-          const st = print.startTime;
-          
-          // Try to parse different timestamp formats
-          if (/^\d+$/.test(st)) {
-            // Unix timestamp (seconds or milliseconds)
-            const ts = parseInt(st);
-            printDate = new Date(ts > 9999999999 ? ts : ts * 1000);
-          } else if (st.includes('T') || st.includes(' ')) {
-            // ISO format or similar
-            printDate = new Date(st);
-          } else {
-            continue; // Can't parse
-          }
-          
-          if (isNaN(printDate.getTime())) continue;
-          
-          const timeDiff = Math.abs(videoTimestampMs - printDate.getTime());
-          const hoursDiff = timeDiff / (1000 * 60 * 60);
-          
-          // Match within 4 hours
-          if (hoursDiff <= 4 && timeDiff < bestTimeDiff) {
-            bestTimeDiff = timeDiff;
-            bestMatch = print;
-          }
-        }
-        
-        if (bestMatch) {
-          db.prepare('UPDATE prints SET videoLocal = ? WHERE id = ?').run(videoFile, bestMatch.id);
-          // Remove from array so it's not matched again
-          const idx = printsWithoutVideo.findIndex(p => p.id === bestMatch.id);
-          if (idx > -1) printsWithoutVideo.splice(idx, 1);
-          
-          matched++;
-          matchDetails.push({ 
-            video: videoFile, 
-            print: bestMatch.title || bestMatch.modelId, 
-            printStart: bestMatch.startTime,
-            timeDiffMinutes: Math.round(bestTimeDiff / (1000 * 60))
-          });
-          console.log(`  Matched to print: ${bestMatch.title || bestMatch.modelId} (diff: ${Math.round(bestTimeDiff / 60000)}min)`);
-        } else {
-          unmatched++;
-          console.log(`  No matching print found for ${videoFile}`);
-        }
-      } else {
-        unmatched++;
-        console.log(`  Could not parse timestamp from: ${videoFile}`);
-      }
-    }
-    
+    // Return immediately with job started status
     res.json({ 
       success: true, 
-      matched, 
-      unmatched,
-      total: videoFiles.length,
-      details: matchDetails
+      message: `Video matching started for ${videoFiles.length} files. Check /api/match-videos-status for progress.`,
+      status: videoMatchJob
     });
+    
+    // Process videos in background
+    (async () => {
+      const matchDetails = [];
+      
+      for (const videoFile of videoFiles) {
+        // Check if job was cancelled
+        if (!videoMatchJob.running) {
+          console.log('  Video matching job cancelled by user');
+          break;
+        }
+        
+        videoMatchJob.processed++;
+        videoMatchJob.currentVideo = videoFile;
+        
+        // Extract timestamp from filename: video_2024-12-13_15-18-02.avi
+        const match = videoFile.match(/video_(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})/);
+        
+        if (match) {
+          const [, date, hours, minutes, seconds] = match;
+          const videoDate = new Date(`${date}T${hours}:${minutes}:${seconds}`);
+          const videoTimestampMs = videoDate.getTime();
+          
+          // Find the best matching print
+          let bestMatch = null;
+          let bestTimeDiff = Infinity;
+          
+          for (const print of printsWithoutVideo) {
+            let printDate;
+            const st = print.startTime;
+            
+            if (/^\d+$/.test(st)) {
+              const ts = parseInt(st);
+              printDate = new Date(ts > 9999999999 ? ts : ts * 1000);
+            } else if (st.includes('T') || st.includes(' ')) {
+              printDate = new Date(st);
+            } else {
+              continue;
+            }
+            
+            if (isNaN(printDate.getTime())) continue;
+            
+            const timeDiff = Math.abs(videoTimestampMs - printDate.getTime());
+            const hoursDiff = timeDiff / (1000 * 60 * 60);
+            
+            if (hoursDiff <= 4 && timeDiff < bestTimeDiff) {
+              bestTimeDiff = timeDiff;
+              bestMatch = print;
+            }
+          }
+          
+          if (bestMatch) {
+            db.prepare('UPDATE prints SET videoLocal = ? WHERE id = ?').run(videoFile, bestMatch.id);
+            const idx = printsWithoutVideo.findIndex(p => p.id === bestMatch.id);
+            if (idx > -1) printsWithoutVideo.splice(idx, 1);
+            
+            videoMatchJob.matched++;
+            matchDetails.push({ 
+              video: videoFile, 
+              print: bestMatch.title || bestMatch.modelId, 
+              timeDiffMinutes: Math.round(bestTimeDiff / (1000 * 60))
+            });
+            console.log(`  [${videoMatchJob.processed}/${videoMatchJob.total}] Matched: ${videoFile} -> ${bestMatch.title || bestMatch.modelId}`);
+          } else {
+            videoMatchJob.unmatched++;
+            console.log(`  [${videoMatchJob.processed}/${videoMatchJob.total}] No match: ${videoFile}`);
+          }
+        } else {
+          videoMatchJob.unmatched++;
+        }
+        
+        // Yield control to event loop
+        await yieldToEventLoop();
+      }
+      
+      const elapsed = ((Date.now() - videoMatchJob.startTime) / 1000).toFixed(1);
+      console.log(`=== VIDEO MATCH COMPLETE: ${videoMatchJob.matched} matched, ${videoMatchJob.unmatched} unmatched in ${elapsed}s ===`);
+      
+      videoMatchJob.running = false;
+      videoMatchJob.currentVideo = '';
+    })();
+    
   } catch (error) {
     console.error('Match videos error:', error);
-    res.status(500).json({ error: 'Failed to match videos' });
+    videoMatchJob.running = false;
+    res.status(500).json({ error: 'Failed to start video matching' });
   }
+});
+
+// Check video match job status
+app.get('/api/match-videos-status', (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  const elapsed = videoMatchJob.startTime ? ((Date.now() - videoMatchJob.startTime) / 1000).toFixed(1) : 0;
+  const percent = videoMatchJob.total > 0 ? Math.round((videoMatchJob.processed / videoMatchJob.total) * 100) : 0;
+  
+  res.json({
+    ...videoMatchJob,
+    elapsedSeconds: elapsed,
+    percentComplete: percent
+  });
+});
+
+// Cancel video match job
+app.post('/api/match-videos-cancel', (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  if (!videoMatchJob.running) {
+    return res.json({ success: false, message: 'No video matching job running' });
+  }
+  
+  videoMatchJob.running = false;
+  res.json({ success: true, message: 'Video matching job cancelled' });
 });
 
 // Debug endpoint to check video matching
@@ -2866,92 +2941,180 @@ app.post('/api/library/cleanup-missing', async (req, res) => {
   }
 });
 
-// Auto-tag all library files
+// Global state for auto-tag background job
+let autoTagJob = {
+  running: false,
+  total: 0,
+  processed: 0,
+  updated: 0,
+  errors: 0,
+  currentFile: '',
+  startTime: null
+};
+
+// Helper to yield control back to event loop (prevents blocking)
+const yieldToEventLoop = () => new Promise(resolve => setImmediate(resolve));
+
+// Auto-tag all library files (non-blocking background job)
 app.post('/api/library/auto-tag-all', async (req, res) => {
   if (!req.session.authenticated) {
     return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  // Check if already running
+  if (autoTagJob.running) {
+    return res.json({ 
+      success: false, 
+      message: 'Auto-tag job already running',
+      status: autoTagJob
+    });
   }
   
   try {
     // Get all library items
     const items = db.prepare('SELECT * FROM library').all();
     
-    console.log(`=== AUTO-TAG ALL: Processing ${items.length} files ===`);
+    // Initialize job status
+    autoTagJob = {
+      running: true,
+      total: items.length,
+      processed: 0,
+      updated: 0,
+      errors: 0,
+      currentFile: '',
+      startTime: Date.now()
+    };
     
-    let processed = 0;
-    let updated = 0;
-    let errors = 0;
+    console.log(`=== AUTO-TAG ALL: Starting background job for ${items.length} files ===`);
     
-    for (const file of items) {
-      try {
-        processed++;
-        console.log(`  [${processed}/${items.length}] Analyzing: ${file.originalName}`);
-        
-        // Build correct file path using fileName (stored path may be outdated)
-        const actualFilePath = path.join(libraryDir, file.fileName);
-        
-        // Skip if file doesn't exist
-        if (!fs.existsSync(actualFilePath)) {
-          console.log(`    File not found: ${actualFilePath}`);
-          errors++;
-          continue;
-        }
-        
-        // Run auto-analysis
-        const analysis = await autoDescribeModel(actualFilePath, file.originalName);
-        
-        // Update description
-        if (analysis.description) {
-          db.prepare('UPDATE library SET description = ? WHERE id = ?').run(analysis.description, file.id);
-        }
-        
-        // Update tags - add to existing tags
-        if (analysis.tags && analysis.tags.length > 0) {
-          // Get existing tags for this file
-          const existingTags = db.prepare(`
-            SELECT t.name FROM tags t 
-            JOIN model_tags mt ON t.id = mt.tag_id 
-            WHERE mt.model_id = ?
-          `).all(file.id).map(t => t.name);
-          
-          // Add new tags that don't exist
-          for (const tagName of analysis.tags) {
-            if (existingTags.includes(tagName)) continue;
-            
-            // Insert or get tag
-            let tag = db.prepare('SELECT id FROM tags WHERE name = ?').get(tagName);
-            if (!tag) {
-              const result = db.prepare('INSERT INTO tags (name) VALUES (?)').run(tagName);
-              tag = { id: result.lastInsertRowid };
-            }
-            
-            // Link tag to model (ignore if already exists)
-            try {
-              db.prepare('INSERT OR IGNORE INTO model_tags (model_id, tag_id) VALUES (?, ?)').run(file.id, tag.id);
-            } catch (e) {}
-          }
-        }
-        
-        updated++;
-      } catch (err) {
-        console.error(`  Error processing ${file.originalName}:`, err.message);
-        errors++;
-      }
-    }
-    
-    console.log(`=== AUTO-TAG ALL COMPLETE: ${updated} updated, ${errors} errors ===`);
-    
+    // Return immediately with job started status
     res.json({ 
       success: true, 
-      message: `Processed ${processed} files: ${updated} updated, ${errors} errors`,
-      processed,
-      updated,
-      errors
+      message: `Auto-tag job started for ${items.length} files. Check /api/library/auto-tag-status for progress.`,
+      status: autoTagJob
     });
+    
+    // Process files in background (non-blocking)
+    (async () => {
+      for (const file of items) {
+        // Check if job was cancelled
+        if (!autoTagJob.running) {
+          console.log('  Auto-tag job cancelled by user');
+          break;
+        }
+        
+        try {
+          autoTagJob.processed++;
+          autoTagJob.currentFile = file.originalName;
+          
+          console.log(`  [${autoTagJob.processed}/${autoTagJob.total}] Analyzing: ${file.originalName}`);
+          
+          // Build correct file path using fileName (stored path may be outdated)
+          const actualFilePath = path.join(libraryDir, file.fileName);
+          
+          // Skip if file doesn't exist
+          if (!fs.existsSync(actualFilePath)) {
+            console.log(`    File not found: ${actualFilePath}`);
+            autoTagJob.errors++;
+            // Yield control to event loop
+            await yieldToEventLoop();
+            continue;
+          }
+          
+          // Run auto-analysis
+          const analysis = await autoDescribeModel(actualFilePath, file.originalName);
+          
+          // Yield control to event loop after analysis (heavy operation)
+          await yieldToEventLoop();
+          
+          // Update description
+          if (analysis.description) {
+            db.prepare('UPDATE library SET description = ? WHERE id = ?').run(analysis.description, file.id);
+          }
+          
+          // Update tags - add to existing tags
+          if (analysis.tags && analysis.tags.length > 0) {
+            // Get existing tags for this file
+            const existingTags = db.prepare(`
+              SELECT t.name FROM tags t 
+              JOIN model_tags mt ON t.id = mt.tag_id 
+              WHERE mt.model_id = ?
+            `).all(file.id).map(t => t.name);
+            
+            // Add new tags that don't exist
+            for (const tagName of analysis.tags) {
+              if (existingTags.includes(tagName)) continue;
+              
+              // Insert or get tag
+              let tag = db.prepare('SELECT id FROM tags WHERE name = ?').get(tagName);
+              if (!tag) {
+                const result = db.prepare('INSERT INTO tags (name) VALUES (?)').run(tagName);
+                tag = { id: result.lastInsertRowid };
+              }
+              
+              // Link tag to model (ignore if already exists)
+              try {
+                db.prepare('INSERT OR IGNORE INTO model_tags (model_id, tag_id) VALUES (?, ?)').run(file.id, tag.id);
+              } catch (e) {}
+            }
+          }
+          
+          autoTagJob.updated++;
+          
+          // Yield control every file to keep server responsive
+          await yieldToEventLoop();
+          
+        } catch (err) {
+          console.error(`  Error processing ${file.originalName}:`, err.message);
+          autoTagJob.errors++;
+          // Yield even on error
+          await yieldToEventLoop();
+        }
+      }
+      
+      const elapsed = ((Date.now() - autoTagJob.startTime) / 1000).toFixed(1);
+      console.log(`=== AUTO-TAG ALL COMPLETE: ${autoTagJob.updated} updated, ${autoTagJob.errors} errors in ${elapsed}s ===`);
+      
+      autoTagJob.running = false;
+      autoTagJob.currentFile = '';
+    })();
+    
   } catch (error) {
     console.error('Auto-tag all error:', error);
-    res.status(500).json({ error: 'Failed to auto-tag all files' });
+    autoTagJob.running = false;
+    res.status(500).json({ error: 'Failed to start auto-tag job' });
   }
+});
+
+// Check auto-tag job status
+app.get('/api/library/auto-tag-status', (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  const elapsed = autoTagJob.startTime ? ((Date.now() - autoTagJob.startTime) / 1000).toFixed(1) : 0;
+  const percent = autoTagJob.total > 0 ? Math.round((autoTagJob.processed / autoTagJob.total) * 100) : 0;
+  
+  res.json({
+    ...autoTagJob,
+    elapsedSeconds: elapsed,
+    percentComplete: percent
+  });
+});
+
+// Cancel auto-tag job
+app.post('/api/library/auto-tag-cancel', (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  if (!autoTagJob.running) {
+    return res.json({ success: false, message: 'No auto-tag job running' });
+  }
+  
+  // Note: This sets the flag, the loop will check and stop
+  autoTagJob.running = false;
+  res.json({ success: true, message: 'Auto-tag job cancelled' });
 });
 
 // Helper function to recursively walk directory
@@ -2972,71 +3135,154 @@ function walkDirectory(dir, fileList = []) {
   return fileList;
 }
 
-// Scan library folder endpoint - recursively scans the library directory for new files
+// Scan library folder endpoint - recursively scans the library directory (non-blocking)
 app.post('/api/library/scan', async (req, res) => {
   if (!req.session.authenticated) {
     return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  // Check if already running
+  if (libraryScanJob.running) {
+    return res.json({ 
+      success: false, 
+      message: 'Library scan already running',
+      status: libraryScanJob
+    });
   }
 
   try {
     console.log(`Scanning library directory: ${libraryDir}`);
     const allFiles = walkDirectory(libraryDir);
-    console.log(`Found ${allFiles.length} total files in library`);
     
-    let added = 0;
-    let skipped = 0;
-    const extractionQueue = [];
-
-    for (const filePath of allFiles) {
-      const ext = path.extname(filePath).toLowerCase();
-      if (ext === '.3mf' || ext === '.stl' || ext === '.gcode') {
+    // Filter to only supported files
+    const supportedFiles = allFiles.filter(f => {
+      const ext = path.extname(f).toLowerCase();
+      return ext === '.3mf' || ext === '.stl' || ext === '.gcode';
+    });
+    
+    // Initialize job status
+    libraryScanJob = {
+      running: true,
+      total: supportedFiles.length,
+      processed: 0,
+      added: 0,
+      skipped: 0,
+      currentFile: '',
+      startTime: Date.now()
+    };
+    
+    console.log(`=== LIBRARY SCAN: Starting background job for ${supportedFiles.length} files ===`);
+    
+    // Return immediately with job started status
+    res.json({ 
+      success: true, 
+      message: `Library scan started for ${supportedFiles.length} files. Check /api/library/scan-status for progress.`,
+      status: libraryScanJob
+    });
+    
+    // Process files in background
+    (async () => {
+      const extractionQueue = [];
+      
+      for (const filePath of supportedFiles) {
+        // Check if job was cancelled
+        if (!libraryScanJob.running) {
+          console.log('  Library scan job cancelled by user');
+          break;
+        }
+        
+        libraryScanJob.processed++;
         const fileName = path.basename(filePath);
+        libraryScanJob.currentFile = fileName;
+        
+        const ext = path.extname(filePath).toLowerCase();
         const relativePath = path.relative(__dirname, filePath);
         
         // Check if already exists in database by file path
         const existing = db.prepare('SELECT id FROM library WHERE filePath = ?').get(relativePath);
         
         if (!existing) {
-          const stats = fs.statSync(filePath);
-          const fileType = ext.substring(1);
+          try {
+            const stats = fs.statSync(filePath);
+            const fileType = ext.substring(1);
 
-          const result = db.prepare(`
-            INSERT INTO library (fileName, originalName, fileType, fileSize, filePath, description, tags)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-          `).run(fileName, fileName, fileType, stats.size, relativePath, '', '');
-          
-          added++;
-          console.log(`  Added: ${relativePath}`);
-          
-          // Queue for geometry extraction
-          if (fileType === '3mf' || fileType === 'stl') {
-            extractionQueue.push({ id: result.lastInsertRowid, path: filePath, type: fileType });
+            const result = db.prepare(`
+              INSERT INTO library (fileName, originalName, fileType, fileSize, filePath, description, tags)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
+            `).run(fileName, fileName, fileType, stats.size, relativePath, '', '');
+            
+            libraryScanJob.added++;
+            console.log(`  [${libraryScanJob.processed}/${libraryScanJob.total}] Added: ${fileName}`);
+            
+            // Queue for geometry extraction
+            if (fileType === '3mf' || fileType === 'stl') {
+              extractionQueue.push({ id: result.lastInsertRowid, path: filePath, type: fileType });
+            }
+          } catch (err) {
+            console.error(`  Error adding ${fileName}:`, err.message);
           }
         } else {
-          skipped++;
+          libraryScanJob.skipped++;
         }
+        
+        // Yield control to event loop every file
+        await yieldToEventLoop();
       }
-    }
-
-    console.log(`Scan complete: ${added} added, ${skipped} skipped`);
-
-    // Trigger background extraction for all new files
-    if (extractionQueue.length > 0) {
-      setImmediate(() => {
-        console.log(`Extracting geometry for ${extractionQueue.length} file(s)...`);
-        extractionQueue.forEach(({ id, path, type }) => {
-          extractGeometry(id, path, type).catch(err => {
-            console.error(`Failed to extract geometry for file ${id}:`, err.message);
+      
+      const elapsed = ((Date.now() - libraryScanJob.startTime) / 1000).toFixed(1);
+      console.log(`=== LIBRARY SCAN COMPLETE: ${libraryScanJob.added} added, ${libraryScanJob.skipped} skipped in ${elapsed}s ===`);
+      
+      // Trigger background extraction for all new files
+      if (extractionQueue.length > 0) {
+        console.log(`Queuing geometry extraction for ${extractionQueue.length} file(s)...`);
+        setImmediate(() => {
+          extractionQueue.forEach(({ id, path: fPath, type }) => {
+            extractGeometry(id, fPath, type).catch(err => {
+              console.error(`Failed to extract geometry for file ${id}:`, err.message);
+            });
           });
         });
-      });
-    }
-
-    res.json({ success: true, added, skipped, total: allFiles.length });
+      }
+      
+      libraryScanJob.running = false;
+      libraryScanJob.currentFile = '';
+    })();
+    
   } catch (error) {
     console.error('Scan error:', error.message);
-    res.status(500).json({ error: 'Failed to scan folder' });
+    libraryScanJob.running = false;
+    res.status(500).json({ error: 'Failed to start library scan' });
   }
+});
+
+// Check library scan job status
+app.get('/api/library/scan-status', (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  const elapsed = libraryScanJob.startTime ? ((Date.now() - libraryScanJob.startTime) / 1000).toFixed(1) : 0;
+  const percent = libraryScanJob.total > 0 ? Math.round((libraryScanJob.processed / libraryScanJob.total) * 100) : 0;
+  
+  res.json({
+    ...libraryScanJob,
+    elapsedSeconds: elapsed,
+    percentComplete: percent
+  });
+});
+
+// Cancel library scan job
+app.post('/api/library/scan-cancel', (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  if (!libraryScanJob.running) {
+    return res.json({ success: false, message: 'No library scan job running' });
+  }
+  
+  libraryScanJob.running = false;
+  res.json({ success: true, message: 'Library scan job cancelled' });
 });
 
 // Check if ffmpeg is available

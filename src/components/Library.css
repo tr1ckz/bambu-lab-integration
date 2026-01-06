@@ -239,6 +239,14 @@
   transform: none;
 }
 
+.btn-scan.cancel {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
+.btn-scan.cancel:hover {
+  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.4);
+}
+
 .help-text {
   margin: 0.5rem 0 0 0;
   font-size: 0.85rem;
@@ -442,6 +450,54 @@
 .btn-auto-tag:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.btn-auto-tag.cancel {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.btn-auto-tag.cancel:hover {
+  box-shadow: 0 6px 18px rgba(239, 68, 68, 0.5);
+}
+
+.auto-tag-progress {
+  margin-top: 1rem;
+  width: 100%;
+}
+
+.auto-tag-progress .progress-bar {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.auto-tag-progress .progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #a855f7 0%, #7c3aed 100%);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.auto-tag-progress .progress-text {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.auto-tag-progress .progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 0.5rem;
+}
+
+.auto-tag-progress .current-file {
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
 }
 
 .btn-download {

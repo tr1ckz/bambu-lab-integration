@@ -36,6 +36,15 @@ const PrintHistory: React.FC = () => {
   const [printerIp, setPrinterIp] = useState('');
   const [printerAccessCode, setPrinterAccessCode] = useState('');
   const [matching, setMatching] = useState(false);
+  const [matchProgress, setMatchProgress] = useState<{
+    running: boolean;
+    total: number;
+    processed: number;
+    matched: number;
+    unmatched: number;
+    currentVideo: string;
+    percentComplete: number;
+  } | null>(null);
   const [videoModal, setVideoModal] = useState<{ modelId: string; title: string } | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
@@ -86,22 +95,62 @@ const PrintHistory: React.FC = () => {
         throw new Error(data.error || 'Failed to match videos');
       }
       
-      // Show appropriate message based on results
-      if (data.matched > 0) {
-        setToast({ 
-          message: `✓ Matched ${data.matched} videos to prints\n${data.unmatched > 0 ? `${data.unmatched} videos had no matching prints` : ''}\nTotal processed: ${data.total}`, 
-          type: 'success' 
-        });
-      } else if (data.total === 0) {
-        setToast({ message: 'No video files found in data/videos', type: 'error' });
+      if (data.success) {
+        setToast({ message: 'Video matching started! Processing in background...', type: 'success' });
+        
+        // Start polling for progress
+        const pollProgress = async () => {
+          try {
+            const statusResponse = await fetch('/api/match-videos-status');
+            const status = await statusResponse.json();
+            
+            setMatchProgress(status);
+            
+            if (status.running) {
+              setTimeout(pollProgress, 1000);
+            } else {
+              setMatching(false);
+              setMatchProgress(null);
+              
+              if (status.matched > 0) {
+                setToast({ 
+                  message: `✓ Matched ${status.matched} videos to prints${status.unmatched > 0 ? `, ${status.unmatched} unmatched` : ''}`, 
+                  type: 'success' 
+                });
+              } else if (status.total === 0) {
+                setToast({ message: 'No video files found in data/videos', type: 'error' });
+              } else {
+                setToast({ message: `No matches found. ${status.unmatched} videos had no matching prints.`, type: 'error' });
+              }
+              fetchPrints();
+            }
+          } catch (err) {
+            console.error('Error polling match status:', err);
+            setMatching(false);
+            setMatchProgress(null);
+          }
+        };
+        
+        pollProgress();
       } else {
-        setToast({ message: `No matches found. ${data.unmatched} videos had no matching prints in the time window.`, type: 'error' });
+        throw new Error(data.message || 'Failed to start video matching');
       }
-      fetchPrints();
     } catch (err) {
       setToast({ message: 'Matching failed: ' + (err instanceof Error ? err.message : 'Unknown error'), type: 'error' });
-    } finally {
       setMatching(false);
+      setMatchProgress(null);
+    }
+  };
+
+  const handleCancelMatch = async () => {
+    try {
+      const response = await fetch('/api/match-videos-cancel', { method: 'POST' });
+      const data = await response.json();
+      if (data.success) {
+        setToast({ message: 'Video matching cancelled', type: 'success' });
+      }
+    } catch (err) {
+      console.error('Error cancelling match:', err);
     }
   };
 
@@ -284,17 +333,40 @@ const PrintHistory: React.FC = () => {
           <button onClick={handleExportCSV} className="btn-export" disabled={prints.length === 0}>
             <span>📊</span> Export CSV
           </button>
-          <button onClick={handleMatchVideos} className="btn-match" disabled={matching}>
-            <span>{matching ? '⏳' : '🔗'}</span> {matching ? 'Matching...' : 'Match Videos'}
-          </button>
+          {!matchProgress ? (
+            <button onClick={handleMatchVideos} className="btn-match" disabled={matching}>
+              <span>{matching ? '⏳' : '🔗'}</span> {matching ? 'Starting...' : 'Match Videos'}
+            </button>
+          ) : (
+            <button onClick={handleCancelMatch} className="btn-match cancel">
+              <span>✕</span> Cancel
+            </button>
+          )}
           <button onClick={handleSync} className="btn-sync" disabled={syncing}>
             <span>{syncing ? '⏳' : '🔄'}</span> {syncing ? 'Syncing...' : 'Sync Cloud'}
           </button>
         </div>
       </div>
 
-
-
+      {matchProgress && (
+        <div className="background-job-progress">
+          <div className="progress-header">
+            <span>🔗 Matching videos to prints...</span>
+            <span>{matchProgress.processed}/{matchProgress.total} ({matchProgress.percentComplete}%)</span>
+          </div>
+          <div className="progress-bar">
+            <div className="progress-fill" style={{ width: `${matchProgress.percentComplete}%` }} />
+          </div>
+          {matchProgress.currentVideo && (
+            <div className="progress-current">
+              Current: {matchProgress.currentVideo.substring(0, 50)}{matchProgress.currentVideo.length > 50 ? '...' : ''}
+            </div>
+          )}
+          <div className="progress-stats">
+            ✓ {matchProgress.matched} matched | ✗ {matchProgress.unmatched} unmatched
+          </div>
+        </div>
+      )}
       <div className="controls">
         <input
           type="text"

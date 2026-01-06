@@ -45,6 +45,24 @@ const Library: React.FC<LibraryProps> = ({ userRole }) => {
   const [bulkTags, setBulkTags] = useState('');
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkTagging, setBulkTagging] = useState(false);
+  const [autoTagProgress, setAutoTagProgress] = useState<{
+    running: boolean;
+    total: number;
+    processed: number;
+    updated: number;
+    errors: number;
+    currentFile: string;
+    percentComplete: number;
+  } | null>(null);
+  const [scanProgress, setScanProgress] = useState<{
+    running: boolean;
+    total: number;
+    processed: number;
+    added: number;
+    skipped: number;
+    currentFile: string;
+    percentComplete: number;
+  } | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [filterType, setFilterType] = useState<string>('all');
   const [filterSizeMin, setFilterSizeMin] = useState<number | ''>('');
@@ -348,15 +366,57 @@ const Library: React.FC<LibraryProps> = ({ userRole }) => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      if (!response.ok) throw new Error('Scan failed');
-      
       const result = await response.json();
-      setToast({ message: `Scan complete! Found ${result.added} new file(s).`, type: 'success' });
-      fetchFiles();
+      
+      if (result.success) {
+        setToast({ message: 'Library scan started! Processing in background...', type: 'success' });
+        
+        // Start polling for progress
+        const pollProgress = async () => {
+          try {
+            const statusResponse = await fetch('/api/library/scan-status');
+            const status = await statusResponse.json();
+            
+            setScanProgress(status);
+            
+            if (status.running) {
+              setTimeout(pollProgress, 1000);
+            } else {
+              setScanning(false);
+              setScanProgress(null);
+              setToast({ 
+                message: `Scan complete! Added ${status.added} new file(s), ${status.skipped} already existed.`, 
+                type: 'success' 
+              });
+              fetchFiles();
+            }
+          } catch (err) {
+            console.error('Error polling scan status:', err);
+            setScanning(false);
+            setScanProgress(null);
+          }
+        };
+        
+        pollProgress();
+      } else {
+        throw new Error(result.message || 'Scan failed');
+      }
     } catch (err) {
       setToast({ message: 'Scan failed: ' + (err instanceof Error ? err.message : 'Unknown error'), type: 'error' });
-    } finally {
       setScanning(false);
+      setScanProgress(null);
+    }
+  };
+
+  const handleCancelScan = async () => {
+    try {
+      const response = await fetch('/api/library/scan-cancel', { method: 'POST' });
+      const data = await response.json();
+      if (data.success) {
+        setToast({ message: 'Library scan cancelled', type: 'success' });
+      }
+    } catch (err) {
+      console.error('Error cancelling scan:', err);
     }
   };
 
@@ -450,13 +510,12 @@ const Library: React.FC<LibraryProps> = ({ userRole }) => {
   };
 
   const handleAutoTagAll = async () => {
-    if (!confirm('This will auto-generate descriptions and tags for ALL files in your library. This may take a while. Continue?')) {
+    if (!confirm('This will auto-generate descriptions and tags for ALL files in your library. The process runs in the background - you can continue using the site. Continue?')) {
       return;
     }
     
     try {
       setAutoTaggingAll(true);
-      setToast({ message: 'Auto-tagging all files... This may take a few minutes.', type: 'success' });
       
       const response = await fetch('/api/library/auto-tag-all', {
         method: 'POST'
@@ -465,15 +524,60 @@ const Library: React.FC<LibraryProps> = ({ userRole }) => {
       const data = await response.json();
       
       if (data.success) {
-        setToast({ message: data.message, type: 'success' });
-        fetchFiles();
+        setToast({ message: 'Auto-tag started! Processing in background...', type: 'success' });
+        
+        // Start polling for progress
+        const pollProgress = async () => {
+          try {
+            const statusResponse = await fetch('/api/library/auto-tag-status');
+            const status = await statusResponse.json();
+            
+            setAutoTagProgress(status);
+            
+            if (status.running) {
+              // Continue polling every 1 second
+              setTimeout(pollProgress, 1000);
+            } else {
+              // Job finished
+              setAutoTaggingAll(false);
+              setAutoTagProgress(null);
+              setToast({ 
+                message: `Auto-tag complete: ${status.updated} files updated, ${status.errors} errors`, 
+                type: status.errors > 0 ? 'error' : 'success' 
+              });
+              fetchFiles();
+            }
+          } catch (err) {
+            console.error('Error polling auto-tag status:', err);
+            setAutoTaggingAll(false);
+            setAutoTagProgress(null);
+          }
+        };
+        
+        // Start polling
+        pollProgress();
       } else {
-        throw new Error(data.error || 'Failed to auto-tag');
+        throw new Error(data.error || data.message || 'Failed to start auto-tag');
       }
     } catch (err) {
-      setToast({ message: 'Auto-tag all failed: ' + (err instanceof Error ? err.message : 'Unknown error'), type: 'error' });
-    } finally {
+      setToast({ message: 'Auto-tag failed: ' + (err instanceof Error ? err.message : 'Unknown error'), type: 'error' });
       setAutoTaggingAll(false);
+      setAutoTagProgress(null);
+    }
+  };
+  
+  const handleCancelAutoTag = async () => {
+    try {
+      const response = await fetch('/api/library/auto-tag-cancel', {
+        method: 'POST'
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        setToast({ message: 'Auto-tag cancelled', type: 'success' });
+      }
+    } catch (err) {
+      console.error('Error cancelling auto-tag:', err);
     }
   };
 
@@ -766,17 +870,72 @@ const Library: React.FC<LibraryProps> = ({ userRole }) => {
           <div className="scan-info">
             <p>📂 Files in <code>/app/library</code> are automatically scanned</p>
             <div className="scan-buttons">
-              <button onClick={handleScanFolder} disabled={scanning} className="btn-scan">
-                {scanning ? '⏳ Scanning...' : '🔄 Refresh Library'}
-              </button>
-              <button 
-                onClick={handleAutoTagAll} 
-                disabled={autoTaggingAll || files.length === 0} 
-                className="btn-auto-tag"
-              >
-                {autoTaggingAll ? '⏳ Processing...' : '✨ Auto-Tag All Files'}
-              </button>
+              {!scanProgress ? (
+                <button onClick={handleScanFolder} disabled={scanning} className="btn-scan">
+                  {scanning ? '⏳ Starting...' : '🔄 Refresh Library'}
+                </button>
+              ) : (
+                <button onClick={handleCancelScan} className="btn-scan cancel">
+                  ✕ Cancel Scan
+                </button>
+              )}
+              {!autoTagProgress ? (
+                <button 
+                  onClick={handleAutoTagAll} 
+                  disabled={autoTaggingAll || files.length === 0} 
+                  className="btn-auto-tag"
+                >
+                  {autoTaggingAll ? '⏳ Starting...' : '✨ Auto-Tag All Files'}
+                </button>
+              ) : (
+                <button 
+                  onClick={handleCancelAutoTag} 
+                  className="btn-auto-tag cancel"
+                >
+                  ✕ Cancel
+                </button>
+              )}
             </div>
+            {scanProgress && (
+              <div className="auto-tag-progress">
+                <div className="progress-header">
+                  <span>🔄 Scanning library...</span>
+                  <span>{scanProgress.added} added / {scanProgress.skipped} skipped</span>
+                </div>
+                <div className="progress-bar">
+                  <div 
+                    className="progress-fill" 
+                    style={{ width: `${scanProgress.percentComplete}%` }}
+                  />
+                </div>
+                <div className="progress-text">
+                  {scanProgress.processed}/{scanProgress.total} files ({scanProgress.percentComplete}%)
+                  {scanProgress.currentFile && (
+                    <span className="current-file"> - {scanProgress.currentFile.substring(0, 40)}{scanProgress.currentFile.length > 40 ? '...' : ''}</span>
+                  )}
+                </div>
+              </div>
+            )}
+            {autoTagProgress && (
+              <div className="auto-tag-progress">
+                <div className="progress-header">
+                  <span>✨ Auto-tagging files...</span>
+                  <span>{autoTagProgress.updated} updated / {autoTagProgress.errors} errors</span>
+                </div>
+                <div className="progress-bar">
+                  <div 
+                    className="progress-fill" 
+                    style={{ width: `${autoTagProgress.percentComplete}%` }}
+                  />
+                </div>
+                <div className="progress-text">
+                  {autoTagProgress.processed}/{autoTagProgress.total} files ({autoTagProgress.percentComplete}%)
+                  {autoTagProgress.currentFile && (
+                    <span className="current-file"> - {autoTagProgress.currentFile.substring(0, 40)}{autoTagProgress.currentFile.length > 40 ? '...' : ''}</span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
           <p className="help-text">Mount your local folder to <code>/app/library</code> in Docker</p>
         </div>
