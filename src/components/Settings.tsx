@@ -189,6 +189,11 @@ function Settings({ userRole }: SettingsProps) {
   const [restoreMessage, setRestoreMessage] = useState('');
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   
+  // Backup progress state
+  const [backupInProgress, setBackupInProgress] = useState(false);
+  const [backupProgress, setBackupProgress] = useState(0);
+  const [backupMessage, setBackupMessage] = useState('');
+  
   // Toast state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
@@ -471,7 +476,9 @@ function Settings({ userRole }: SettingsProps) {
 
   const handleBackupNow = async () => {
     setDbMaintenanceLoading(true);
-    setToast({ message: 'Starting backup... This may take several minutes for large backups.', type: 'success' });
+    setBackupInProgress(true);
+    setBackupProgress(0);
+    setBackupMessage('Starting backup...');
     
     try {
       // Start backup in async mode to avoid gateway timeouts
@@ -503,7 +510,11 @@ function Settings({ userRole }: SettingsProps) {
             const statusResponse = await fetch(`/api/settings/database/backup/status/${data.jobId}`);
             const statusData = await statusResponse.json();
             
+            setBackupProgress(statusData.progress || 0);
+            setBackupMessage(statusData.message || 'Creating backup...');
+            
             if (statusData.status === 'completed') {
+              setBackupInProgress(false);
               setDbMaintenanceLoading(false);
               setDbResultModal({
                 title: 'Backup Complete',
@@ -516,6 +527,7 @@ function Settings({ userRole }: SettingsProps) {
               setLastBackupDate(new Date().toISOString());
               loadAvailableBackups();
             } else if (statusData.status === 'failed') {
+              setBackupInProgress(false);
               setDbMaintenanceLoading(false);
               setToast({ message: statusData.error || 'Backup failed', type: 'error' });
             } else {
@@ -533,6 +545,7 @@ function Settings({ userRole }: SettingsProps) {
         setTimeout(pollStatus, 2000);
       } else if (data.success) {
         // Synchronous response (for backwards compatibility)
+        setBackupInProgress(false);
         setDbResultModal({
           title: 'Backup Complete',
           icon: '💾',
@@ -545,10 +558,12 @@ function Settings({ userRole }: SettingsProps) {
         loadAvailableBackups();
         setDbMaintenanceLoading(false);
       } else {
+        setBackupInProgress(false);
         setToast({ message: data.error || 'Failed to create backup', type: 'error' });
         setDbMaintenanceLoading(false);
       }
     } catch (error: any) {
+      setBackupInProgress(false);
       let errorMsg = 'Failed to create backup';
       if (error?.name === 'AbortError') {
         errorMsg = 'Backup timed out. Try excluding videos for faster backup.';
@@ -2619,6 +2634,13 @@ function Settings({ userRole }: SettingsProps) {
           message={restartMessage}
           checkServerHealth={true}
           onComplete={() => window.location.reload()}
+        />
+      )}
+
+      {backupInProgress && (
+        <LoadingSplash 
+          message={backupMessage}
+          progress={backupProgress}
         />
       )}
     </div>
