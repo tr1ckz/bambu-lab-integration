@@ -6126,9 +6126,9 @@ app.post('/api/settings/database/backup', async (req, res) => {
       }
     }
     
-    // Include library files if requested
+    // Include library files if requested (library is at project root: /app/library)
     if (includeLibrary) {
-      const libraryPath = path.join(dataDir, 'library');
+      const libraryPath = path.join(__dirname, 'library');
       if (fs.existsSync(libraryPath)) {
         // Recursively count files in library directory (filtering by known extensions)
         const allowedExts = new Set(['.3mf', '.stl', '.gcode']);
@@ -6163,8 +6163,7 @@ app.post('/api/settings/database/backup', async (req, res) => {
         const libFiles = countFilesRecursive(libraryPath);
         const allFiles = countAllFilesRecursive(libraryPath);
         console.log(`[Backup] Library path: ${libraryPath}, found ${allFiles} total files, ${libFiles} library files (recursive)`);
-        // Always include the library directory in the archive when toggle is on
-        filesToBackup.push('library/');
+        // Do not push here; we'll merge library as a separate archive after main tar
         libraryCount = libFiles > 0 ? libFiles : allFiles; // Prefer filtered count; fall back to all files
       } else {
         console.log(`[Backup] Library path does not exist: ${libraryPath}`);
@@ -6204,7 +6203,20 @@ app.post('/api/settings/database/backup', async (req, res) => {
       filesToBackup
     );
     
-    // If covers are included, create a separate covers tarball and merge manually
+    // Merge in optional archives (library, covers) by extracting and repacking
+    const extraArchives = [];
+    if (includeLibrary && libraryCount > 0 && fs.existsSync(path.join(__dirname, 'library'))) {
+      const libraryBackupPath = path.join(backupDir, `library_temp_${Date.now()}.tar.gz`);
+      await tar.create(
+        {
+          gzip: true,
+          file: libraryBackupPath,
+          cwd: __dirname,
+        },
+        ['library/']
+      );
+      extraArchives.push(libraryBackupPath);
+    }
     if (includeCovers && coverCount > 0) {
       const coversBackupPath = path.join(backupDir, `covers_temp_${Date.now()}.tar.gz`);
       await tar.create(
@@ -6215,39 +6227,28 @@ app.post('/api/settings/database/backup', async (req, res) => {
         },
         ['covers/']
       );
-      
-      // Extract both archives to a temp folder and repack
+      extraArchives.push(coversBackupPath);
+    }
+    if (extraArchives.length > 0) {
       const tempMergeDir = path.join(backupDir, `merge_temp_${Date.now()}`);
       fs.mkdirSync(tempMergeDir, { recursive: true });
-      
+
       // Extract main backup
-      await tar.extract({
-        file: backupFile,
-        cwd: tempMergeDir
-      });
-      
-      // Extract covers backup
-      await tar.extract({
-        file: coversBackupPath,
-        cwd: tempMergeDir
-      });
-      
-      // Remove old backup file
+      await tar.extract({ file: backupFile, cwd: tempMergeDir });
+      // Extract each extra archive
+      for (const extra of extraArchives) {
+        await tar.extract({ file: extra, cwd: tempMergeDir });
+      }
+
+      // Remove old backup and temps
       fs.unlinkSync(backupFile);
-      fs.unlinkSync(coversBackupPath);
-      
-      // Create new combined backup
+      for (const extra of extraArchives) {
+        try { fs.unlinkSync(extra); } catch {}
+      }
+
+      // Repack combined backup
       const allFiles = fs.readdirSync(tempMergeDir);
-      await tar.create(
-        {
-          gzip: true,
-          file: backupFile,
-          cwd: tempMergeDir
-        },
-        allFiles
-      );
-      
-      // Clean up temp directory
+      await tar.create({ gzip: true, file: backupFile, cwd: tempMergeDir }, allFiles);
       fs.rmSync(tempMergeDir, { recursive: true, force: true });
     }
     
