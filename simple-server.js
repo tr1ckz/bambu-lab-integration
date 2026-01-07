@@ -3838,19 +3838,56 @@ app.get('/api/maintenance', async (req, res) => {
       
       console.log(`[Maintenance GET] Task "${task.task_name}": DB hours_until_due=${task.hours_until_due}, interval=${task.interval_hours}`);
       
-      if (task.hours_until_due) {
+      if (task.hours_until_due !== null && task.hours_until_due !== undefined) {
         // hours_until_due stores the ABSOLUTE hour marker when maintenance is due
         // e.g., if total print hours is 1000 and task is due at 2222, then 2222 - 1000 = 1222 hrs remaining
         hoursUntilDue = task.hours_until_due - currentPrintHours;
         console.log(`[Maintenance GET] Task "${task.task_name}": Calculated ${task.hours_until_due} - ${currentPrintHours.toFixed(2)} = ${hoursUntilDue.toFixed(2)} hrs remaining`);
         isOverdue = hoursUntilDue < 0;
         isDueSoon = !isOverdue && hoursUntilDue <= 50;
-      } else if (task.next_due) {
-        // Fallback to time-based if hours_until_due not set
+      } else if (task.next_due && task.interval_hours) {
+        // Fallback: Calculate from next_due and interval_hours
+        // If next_due exists but hours_until_due is null, initialize it now
+        console.log(`[Maintenance GET] Task "${task.task_name}": hours_until_due is NULL, calculating from interval...`);
+        
+        // If never performed, due at current + interval
+        // If last_performed exists, calculate from that
+        if (task.last_performed) {
+          // The task was completed before hours_until_due column existed
+          // We need to retroactively calculate when it should be due
+          // This is tricky because we don't know the print hours at completion time
+          // Best guess: use next_due time-based as a fallback
+          const now = new Date().toISOString();
+          isOverdue = task.next_due < now;
+          isDueSoon = !isOverdue && new Date(task.next_due) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+          
+          // Try to initialize hours_until_due for this task
+          const taskNextDueHours = currentPrintHours + task.interval_hours;
+          try {
+            db.prepare('UPDATE maintenance_tasks SET hours_until_due = ? WHERE id = ?').run(taskNextDueHours, task.id);
+            console.log(`[Maintenance GET] Initialized hours_until_due=${taskNextDueHours} for task ${task.id}`);
+            hoursUntilDue = task.interval_hours; // Since we just set it to current + interval
+          } catch (e) {
+            console.error(`[Maintenance GET] Failed to initialize hours_until_due:`, e.message);
+          }
+        } else {
+          // New task never performed - set it to be due at current + interval
+          hoursUntilDue = task.interval_hours;
+          const taskNextDueHours = currentPrintHours + task.interval_hours;
+          try {
+            db.prepare('UPDATE maintenance_tasks SET hours_until_due = ? WHERE id = ?').run(taskNextDueHours, task.id);
+            console.log(`[Maintenance GET] Initialized new task hours_until_due=${taskNextDueHours} for task ${task.id}`);
+          } catch (e) {
+            console.error(`[Maintenance GET] Failed to initialize hours_until_due:`, e.message);
+          }
+          isDueSoon = hoursUntilDue <= 50;
+        }
+      } else {
+        // Fallback to time-based if neither hours_until_due nor next_due is set
         console.log(`[Maintenance GET] Task "${task.task_name}": Using time-based fallback, next_due=${task.next_due}`);
         const now = new Date().toISOString();
-        isOverdue = task.next_due < now;
-        isDueSoon = !isOverdue && new Date(task.next_due) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        isOverdue = task.next_due && task.next_due < now;
+        isDueSoon = !isOverdue && task.next_due && new Date(task.next_due) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
       }
       
       return {
