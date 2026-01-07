@@ -4666,9 +4666,14 @@ async function sendDiscordNotification(type, data) {
     } else if (type === 'maintenance' || type === 'backup') {
       // Use maintenance webhook for maintenance and backup notifications
       const webhookRow = getConfig.get('discord_maintenance_webhook');
-      const enabledRow = getConfig.get('discord_maintenance_enabled');
+      const maintenanceEnabledRow = getConfig.get('discord_maintenance_enabled');
       webhookUrl = webhookRow?.value;
-      enabled = enabledRow?.value === 'true';
+      if (type === 'backup') {
+        const backupEnabledRow = getConfig.get('discord_backup_enabled');
+        enabled = backupEnabledRow?.value === 'true';
+      } else {
+        enabled = maintenanceEnabledRow?.value === 'true';
+      }
     }
     
     if (!enabled || !webhookUrl) {

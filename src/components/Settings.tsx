@@ -782,7 +782,7 @@ function Settings({ userRole }: SettingsProps) {
     }
   };
 
-  const handleTestDiscordUnified = async (type: 'printer' | 'maintenance') => {
+  const handleTestDiscordUnified = async (type: 'printer' | 'maintenance' | 'backup') => {
     if (!discordWebhook) {
       setToast({ message: 'Please enter a Discord webhook URL', type: 'error' });
       return;
@@ -1700,6 +1700,9 @@ function Settings({ userRole }: SettingsProps) {
             <button type="button" className="btn btn-secondary" onClick={() => handleTestDiscordUnified('maintenance')} disabled={!discordWebhook || discordTesting === 'maintenance'}>
               {discordTesting === 'maintenance' ? 'Sending...' : 'Test Maintenance'}
             </button>
+            <button type="button" className="btn btn-secondary" onClick={() => handleTestDiscordUnified('backup')} disabled={!discordWebhook || discordTesting === 'backup'}>
+              {discordTesting === 'backup' ? 'Sending...' : 'Test Backup'}
+            </button>
           </div>
         </div>
 
@@ -1724,6 +1727,7 @@ function Settings({ userRole }: SettingsProps) {
           <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
             <button type="button" className="btn btn-secondary" onClick={() => handleTestTelegram('printer')} disabled={!telegramBotToken || !telegramChatId}>Test Printer</button>
             <button type="button" className="btn btn-secondary" onClick={() => handleTestTelegram('maintenance')} disabled={!telegramBotToken || !telegramChatId}>Test Maintenance</button>
+            <button type="button" className="btn btn-secondary" onClick={() => handleTestTelegram('backup')} disabled={!telegramBotToken || !telegramChatId}>Test Backup</button>
           </div>
         </div>
 
@@ -1742,6 +1746,7 @@ function Settings({ userRole }: SettingsProps) {
           <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
             <button type="button" className="btn btn-secondary" onClick={() => handleTestSlack('printer')} disabled={!slackWebhook}>Test Printer</button>
             <button type="button" className="btn btn-secondary" onClick={() => handleTestSlack('maintenance')} disabled={!slackWebhook}>Test Maintenance</button>
+            <button type="button" className="btn btn-secondary" onClick={() => handleTestSlack('backup')} disabled={!slackWebhook}>Test Backup</button>
           </div>
         </div>
 
