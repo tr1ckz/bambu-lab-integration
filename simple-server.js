@@ -5582,7 +5582,7 @@ app.post('/api/settings/database/backup', async (req, res) => {
     console.error('Failed to backup database:', error);
     res.status(500).json({ success: false, error: error.message });
   }
-};
+});
 
 // Handle shutdown signals
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
