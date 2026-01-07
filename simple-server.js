@@ -4510,7 +4510,10 @@ async function sendDiscordNotification(type, data) {
       
       if (data.size) embed.fields.push({ name: 'Archive Size', value: data.size, inline: true });
       if (data.videos !== undefined) embed.fields.push({ name: 'Videos', value: data.videos > 0 ? `${data.videos} files` : 'Excluded', inline: true });
-      if (data.library !== undefined) embed.fields.push({ name: 'Library Files', value: data.library > 0 ? `${data.library} files` : 'Excluded', inline: true });
+      if (data.library !== undefined) {
+        const libText = data.includeLibrary ? `Included (${data.library} files)` : 'Excluded';
+        embed.fields.push({ name: 'Library Files', value: libText, inline: true });
+      }
       if (data.covers !== undefined) embed.fields.push({ name: 'Cover Images', value: data.covers > 0 ? `${data.covers} files` : 'Excluded', inline: true });
       if (data.remoteUploaded) embed.fields.push({ name: 'Remote Upload', value: '✅ Uploaded', inline: true });
     }
@@ -5886,21 +5889,42 @@ app.post('/api/settings/database/backup', async (req, res) => {
     if (includeLibrary) {
       const libraryPath = path.join(dataDir, 'library');
       if (fs.existsSync(libraryPath)) {
-        const allFiles = fs.readdirSync(libraryPath);
-        const libraryFiles = allFiles.filter(f => 
-          f.endsWith('.3mf') || f.endsWith('.stl') || f.endsWith('.gcode') || 
-          f.endsWith('.STL') || f.endsWith('.3MF') || f.endsWith('.GCODE')
-        );
-        console.log(`[Backup] Library path: ${libraryPath}, found ${allFiles.length} total files, ${libraryFiles.length} library files`);
-        if (libraryFiles.length > 0) {
-          filesToBackup.push('library/');
-          libraryCount = libraryFiles.length;
-        } else if (allFiles.length > 0) {
-          // Include all files if no specific library files found
-          filesToBackup.push('library/');
-          libraryCount = allFiles.length;
-          console.log(`[Backup] Including all ${allFiles.length} files from library folder`);
-        }
+        // Recursively count files in library directory (filtering by known extensions)
+        const allowedExts = new Set(['.3mf', '.stl', '.gcode']);
+        const pathModule = require('path');
+        const countFilesRecursive = (dir) => {
+          let count = 0;
+          const entries = fs.readdirSync(dir, { withFileTypes: true });
+          for (const entry of entries) {
+            const fullPath = pathModule.join(dir, entry.name);
+            if (entry.isDirectory()) {
+              count += countFilesRecursive(fullPath);
+            } else if (entry.isFile()) {
+              const ext = pathModule.extname(entry.name).toLowerCase();
+              if (allowedExts.has(ext)) count += 1;
+            }
+          }
+          return count;
+        };
+        const countAllFilesRecursive = (dir) => {
+          let count = 0;
+          const entries = fs.readdirSync(dir, { withFileTypes: true });
+          for (const entry of entries) {
+            const fullPath = pathModule.join(dir, entry.name);
+            if (entry.isDirectory()) {
+              count += countAllFilesRecursive(fullPath);
+            } else if (entry.isFile()) {
+              count += 1;
+            }
+          }
+          return count;
+        };
+        const libFiles = countFilesRecursive(libraryPath);
+        const allFiles = countAllFilesRecursive(libraryPath);
+        console.log(`[Backup] Library path: ${libraryPath}, found ${allFiles} total files, ${libFiles} library files (recursive)`);
+        // Always include the library directory in the archive when toggle is on
+        filesToBackup.push('library/');
+        libraryCount = libFiles > 0 ? libFiles : allFiles; // Prefer filtered count; fall back to all files
       } else {
         console.log(`[Backup] Library path does not exist: ${libraryPath}`);
       }
@@ -6115,6 +6139,7 @@ app.post('/api/settings/database/backup', async (req, res) => {
         size: backupSize,
         videos: includeVideos ? videoCount : 0,
         library: includeLibrary ? libraryCount : 0,
+        includeLibrary,
         covers: includeCovers ? coverCount : 0,
         remoteUploaded: remoteUploaded
       });
