@@ -213,28 +213,29 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ onNavigate }) => {
             {recentPrints.length === 0 ? (
               <div className="widget-empty">
                 <p>No print history yet</p>
+                <button onClick={() => onNavigate('history')}>Sync Print History</button>
               </div>
             ) : (
-              <div className="prints-list">
-                {recentPrints.map(print => (
-                  <div key={print.id} className="print-item">
-                    {print.cover ? (
-                      <img src={print.cover} alt="" className="print-thumbnail" />
-                    ) : (
-                      <div className="print-thumbnail-placeholder">📦</div>
-                    )}
-                    <div className="print-info">
-                      <span className="print-title">{print.title || 'Untitled Print'}</span>
-                      <span className="print-meta">
-                        {print.deviceName} • {new Date(print.startTime).toLocaleDateString()}
+              <div className="recent-prints-grid">
+                {recentPrints.slice(0, 5).map(print => (
+                  <div key={print.id} className="recent-print-card" onClick={() => onNavigate('history')}>
+                    <div className="recent-print-cover">
+                      {print.cover ? (
+                        <img src={print.cover} alt="" />
+                      ) : (
+                        <span className="cover-placeholder">📦</span>
+                      )}
+                      <span 
+                        className="print-status-badge" 
+                        style={{ backgroundColor: getStatusColor(print.status) }}
+                      >
+                        {getStatusText(print.status)}
                       </span>
                     </div>
-                    <span 
-                      className="print-status" 
-                      style={{ color: getStatusColor(print.status) }}
-                    >
-                      {getStatusText(print.status)}
-                    </span>
+                    <div className="recent-print-info">
+                      <span className="recent-print-title">{print.title || 'Untitled'}</span>
+                      <span className="recent-print-date">{new Date(print.startTime).toLocaleDateString()}</span>
+                    </div>
                   </div>
                 ))}
               </div>

@@ -3864,7 +3864,7 @@ app.post('/api/maintenance', async (req, res) => {
   }
   
   const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
-  if (!user || user.role !== 'admin') {
+  if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
     return res.status(403).json({ error: 'Admin access required' });
   }
   
@@ -3895,7 +3895,7 @@ app.put('/api/maintenance/:id', async (req, res) => {
   }
   
   const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
-  if (!user || user.role !== 'admin') {
+  if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
     return res.status(403).json({ error: 'Admin access required' });
   }
   
@@ -3924,7 +3924,7 @@ app.delete('/api/maintenance/:id', async (req, res) => {
   }
   
   const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
-  if (!user || user.role !== 'admin') {
+  if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
     return res.status(403).json({ error: 'Admin access required' });
   }
   
@@ -5688,10 +5688,14 @@ app.post('/api/settings/database/backup', async (req, res) => {
     const filesToBackup = [];
     const dataDir = path.join(__dirname, 'data');
     
-    // Always include the database
+    // Always include the database (only add shm/wal if they exist)
     filesToBackup.push('printhive.db');
-    filesToBackup.push('printhive.db-shm');
-    filesToBackup.push('printhive.db-wal');
+    if (fs.existsSync(path.join(dataDir, 'printhive.db-shm'))) {
+      filesToBackup.push('printhive.db-shm');
+    }
+    if (fs.existsSync(path.join(dataDir, 'printhive.db-wal'))) {
+      filesToBackup.push('printhive.db-wal');
+    }
     
     // Count items for reporting
     let videoCount = 0;

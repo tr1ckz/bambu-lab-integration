@@ -341,16 +341,14 @@ function Maintenance() {
                   <div className="task-meta">
                     {printer && <span className="meta-item">🖨️ {printer.name}</span>}
                     <span className="meta-item">🔄 Every {formatHours(task.interval_hours)}</span>
-                    {task.hours_until_due !== null && task.hours_until_due !== undefined && !isNaN(task.hours_until_due) && (
-                      <span className="meta-item" style={{ 
-                        fontWeight: 'bold', 
-                        color: task.hours_until_due < 0 ? '#ff6b6b' : task.hours_until_due < 50 ? '#ffa726' : '#4caf50' 
-                      }}>
-                        ⏰ {task.hours_until_due > 0 
-                          ? `${Math.round(task.hours_until_due)} hrs until maintenance` 
-                          : `${Math.abs(Math.round(task.hours_until_due))} hrs overdue`}
-                      </span>
-                    )}
+                    <span className="meta-item hours-display" style={{ 
+                      fontWeight: 'bold', 
+                      color: (task.hours_until_due ?? 0) < 0 ? '#ff6b6b' : (task.hours_until_due ?? 0) < 50 ? '#ffa726' : '#4caf50' 
+                    }}>
+                      ⏰ {(task.hours_until_due ?? 0) > 0 
+                        ? `${Math.round(task.hours_until_due ?? 0)} hrs until maintenance` 
+                        : `${Math.abs(Math.round(task.hours_until_due ?? 0))} hrs overdue`}
+                    </span>
                     <span className="meta-item">📅 Last: {formatDate(task.last_performed)}</span>
                   </div>
                 </div>
