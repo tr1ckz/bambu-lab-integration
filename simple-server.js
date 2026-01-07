@@ -3342,7 +3342,12 @@ app.get('/api/camera-snapshot', async (req, res) => {
   // For RTSP streams, use ffmpeg via child_process for better control
   const { spawn } = require('child_process');
   
-  const tempFile = path.join(__dirname, 'data', `camera-temp-${Date.now()}.jpg`);
+  // Create temp directory if it doesn't exist
+  const tempDir = path.join(__dirname, 'data', 'temp');
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+  }
+  const tempFile = path.join(tempDir, `camera-temp-${Date.now()}.jpg`);
   
   console.log('Attempting RTSP snapshot:', rtspUrl.replace(/:[^:@]*@/, ':***@'));
   
@@ -5251,6 +5256,29 @@ app.get('*', (req, res, next) => {
 httpServer = app.listen(PORT, async () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log('Database: SQLite (data/printhive.db)');
+  
+  // Clean up old camera temp files on startup
+  try {
+    const tempDir = path.join(__dirname, 'data', 'temp');
+    if (fs.existsSync(tempDir)) {
+      const files = fs.readdirSync(tempDir);
+      const oldFiles = files.filter(f => f.startsWith('camera-temp-'));
+      oldFiles.forEach(file => {
+        try {
+          fs.unlinkSync(path.join(tempDir, file));
+          console.log(`Cleaned up old temp file: ${file}`);
+        } catch (err) {
+          console.error(`Failed to delete ${file}:`, err);
+        }
+      });
+      if (oldFiles.length > 0) {
+        console.log(`Cleaned ${oldFiles.length} old camera temp files`);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to clean temp directory:', err);
+  }
+  
   console.log('Available routes:');
   console.log('  - GET  / (login page)');
   console.log('  - POST /auth/login');
