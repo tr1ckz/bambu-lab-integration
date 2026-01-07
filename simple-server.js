@@ -5812,6 +5812,9 @@ app.post('/api/settings/database/backup', async (req, res) => {
   const includeCovers = req.body.includeCovers !== false;
   const async = req.body.async === true; // If true, return immediately with job ID
   
+  console.log(`[Backup] Request body:`, JSON.stringify(req.body, null, 2));
+  console.log(`[Backup] Options: includeVideos=${includeVideos}, includeLibrary=${includeLibrary}, includeCovers=${includeCovers}, async=${async}`);
+  
   // Create backup file with timestamp
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0] + '_' + Date.now();
   const backupFileName = `printhive_backup_${timestamp}.tar.gz`;
@@ -5915,6 +5918,9 @@ app.post('/api/settings/database/backup', async (req, res) => {
         }
       }
     }
+    
+    console.log(`[Backup] Final filesToBackup array:`, filesToBackup);
+    console.log(`[Backup] Counts - Videos: ${videoCount}, Library: ${libraryCount}, Covers: ${coverCount}`);
     
     // Create tar.gz archive
     await tar.create(
