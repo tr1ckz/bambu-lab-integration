@@ -4,35 +4,35 @@
 
 ### Using Docker Hub (Recommended)
 ```bash
-docker pull ghcr.io/tr1ckz/bambu-lab-integration:latest
+docker pull ghcr.io/tr1ckz/printhive:latest
 
 docker run -d \
-  --name bambu-lab \
+  --name printhive \
   -p 3000:3000 \
   -e PORT=3000 \
-  -v bambu_data:/app/data \
-  -v bambu_library:/app/library \
-  -v bambu_sessions:/app/sessions \
-  ghcr.io/tr1ckz/bambu-lab-integration:latest
+  -v printhive_data:/app/data \
+  -v printhive_library:/app/library \
+  -v printhive_sessions:/app/sessions \
+  ghcr.io/tr1ckz/printhive:latest
 ```
 
 **Custom Port Example:**
 ```bash
 # Run on port 8080 instead
 docker run -d \
-  --name bambu-lab \
+  --name printhive \
   -p 8080:8080 \
   -e PORT=8080 \
-  -v bambu_data:/app/data \
-  -v bambu_library:/app/library \
-  -v bambu_sessions:/app/sessions \
-  ghcr.io/tr1ckz/bambu-lab-integration:latest
+  -v printhive_data:/app/data \
+  -v printhive_library:/app/library \
+  -v printhive_sessions:/app/sessions \
+  ghcr.io/tr1ckz/printhive:latest
 ```
 
 ### Building Locally
 ```bash
-docker build -t bambu-lab-integration:latest .
-docker run -d --name bambu-lab -p 3000:3000 -e PORT=3000 bambu-lab-integration:latest
+docker build -t printhive:latest .
+docker run -d --name printhive -p 3000:3000 -e PORT=3000 printhive:latest
 ```
 
 ## Configuration
@@ -64,8 +64,8 @@ docker-compose up -d
 3. Set **Template**: `Custom`
 
 ### Step 2: Basic Configuration
-- **Name**: `bambu-lab-integration`
-- **Repository**: `ghcr.io/tr1ckz/bambu-lab-integration:latest`
+- **Name**: `printhive`
+- **Repository**: `ghcr.io/tr1ckz/printhive:latest`
 - **Network Type**: `Bridge`
 - **WebUI**: `http://[IP]:[PORT:3000]`
 
@@ -81,9 +81,9 @@ Add these volume mappings:
 
 | Container Path | Host Path | Mode |
 |----------------|-----------|------|
-| `/app/data` | `/mnt/user/appdata/bambu-lab/data` | RW |
-| `/app/library` | `/mnt/user/appdata/bambu-lab/library` | RW |
-| `/app/sessions` | `/mnt/user/appdata/bambu-lab/sessions` | RW |
+| `/app/data` | `/mnt/user/appdata/printhive/data` | RW |
+| `/app/library` | `/mnt/user/appdata/printhive/library` | RW |
+| `/app/sessions` | `/mnt/user/appdata/printhive/sessions` | RW |
 
 ### Step 5: Environment Variables
 Add these variables (optional but recommended):
@@ -123,7 +123,7 @@ Save this configuration as a custom template for easy reinstallation:
 
 **Container won't start:**
 ```bash
-docker logs bambu-lab
+docker logs printhive
 ```
 
 **Can't connect to printer:**
@@ -138,7 +138,8 @@ docker logs bambu-lab
 ## GitHub Actions
 
 Automatic builds trigger on push to `main` branch. Images published to:
-- `ghcr.io/tr1ckz/bambu-lab-integration:latest`
-- `ghcr.io/tr1ckz/bambu-lab-integration:main`
+- `ghcr.io/tr1ckz/printhive:latest`
+- `ghcr.io/tr1ckz/printhive:main`
 
 Multi-platform support: `linux/amd64`, `linux/arm64`
+

@@ -5,12 +5,12 @@
 Run this single command to fix the admin user in your Docker container:
 
 ```bash
-docker exec bambu-lab-integration sqlite3 /app/data/printhive.db "UPDATE users SET role = 'superadmin', password = 'admin' WHERE username = 'admin'; SELECT username, role FROM users WHERE username = 'admin';"
+docker exec printhive sqlite3 /app/data/printhive.db "UPDATE users SET role = 'superadmin', password = 'admin' WHERE username = 'admin'; SELECT username, role FROM users WHERE username = 'admin';"
 ```
 
 **If using docker-compose:**
 ```bash
-docker-compose exec bambu-web sqlite3 /app/data/printhive.db "UPDATE users SET role = 'superadmin', password = 'admin' WHERE username = 'admin'; SELECT username, role FROM users WHERE username = 'admin';"
+docker-compose exec printhive sqlite3 /app/data/printhive.db "UPDATE users SET role = 'superadmin', password = 'admin' WHERE username = 'admin'; SELECT username, role FROM users WHERE username = 'admin';"
 ```
 
 ### What this does:
@@ -31,15 +31,15 @@ The script shows more info and handles edge cases:
 
 ```bash
 # Copy the script to your container
-docker cp reset-admin.sh bambu-lab-integration:/tmp/reset-admin.sh
+docker cp reset-admin.sh printhive:/tmp/reset-admin.sh
 
 # Run it
-docker exec bambu-lab-integration sh /tmp/reset-admin.sh
+docker exec printhive sh /tmp/reset-admin.sh
 ```
 
 **Or use the Node.js version (better output):**
 ```bash
-docker exec bambu-lab-integration node /app/reset-admin.js
+docker exec printhive node /app/reset-admin.js
 ```
 
 ---
@@ -50,7 +50,7 @@ docker exec bambu-lab-integration node /app/reset-admin.js
 # List all running containers
 docker ps
 
-# Look for a name like "bambu-lab-integration" or "bambu-lab"
+# Look for a name like "printhive"
 ```
 
 ---

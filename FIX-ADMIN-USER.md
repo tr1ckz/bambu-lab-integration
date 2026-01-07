@@ -26,11 +26,11 @@ docker exec <container-name> node /app/reset-admin.js
 ### Using Docker Compose
 ```bash
 # Run the Node.js script in the container
-docker-compose exec bambu-web node reset-admin.js
+docker-compose exec printhive node reset-admin.js
 
 # Or run the shell script
-docker cp reset-admin.sh bambu-lab-integration:/tmp/reset-admin.sh
-docker-compose exec bambu-web sh /tmp/reset-admin.sh
+docker cp reset-admin.sh printhive:/tmp/reset-admin.sh
+docker-compose exec printhive sh /tmp/reset-admin.sh
 ```
 
 ---
@@ -47,21 +47,21 @@ docker-compose restart
 
 ### Quick One-Liner
 ```bash
-docker-compose exec bambu-web sqlite3 /app/data/printhive.db "UPDATE users SET role = 'superadmin' WHERE username = 'admin'; SELECT username, role FROM users WHERE username = 'admin';"
+docker-compose exec printhive sqlite3 /app/data/printhive.db "UPDATE users SET role = 'superadmin' WHERE username = 'admin'; SELECT username, role FROM users WHERE username = 'admin';"
 ```
 
 ### Using the SQL File
 ```bash
 # Copy the SQL file to the container and execute it
 docker cp fix-admin.sql <container-name>:/tmp/fix-admin.sql
-docker-compose exec bambu-web sqlite3 /app/data/printhive.db < /tmp/fix-admin.sql
+docker-compose exec printhive sqlite3 /app/data/printhive.db < /tmp/fix-admin.sql
 ```
 
 ## Method 4: Interactive Shell
 
 ```bash
 # Get a shell in the container
-docker-compose exec bambu-web sh
+docker-compose exec printhive sh
 
 # Run SQLite
 sqlite3 /app/data/printhive.db
