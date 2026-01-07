@@ -136,6 +136,11 @@ function Settings({ userRole }: SettingsProps) {
   const [backupRetention, setBackupRetention] = useState(30); // days
   const [dbMaintenanceLoading, setDbMaintenanceLoading] = useState(false);
   const [lastBackupDate, setLastBackupDate] = useState<string | null>(null);
+  const [dbResultModal, setDbResultModal] = useState<{
+    title: string;
+    icon: string;
+    details: Record<string, string | number>;
+  } | null>(null);
   
   // Toast state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -267,6 +272,14 @@ function Settings({ userRole }: SettingsProps) {
     }
   };
 
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(Math.abs(bytes) || 1) / Math.log(k));
+    return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+  };
+
   const handleVacuumDatabase = async () => {
     setDbVacuuming(true);
     try {
@@ -274,7 +287,18 @@ function Settings({ userRole }: SettingsProps) {
         method: 'POST'
       });
       const data = await response.json();
-      if (data.success) {
+      if (data.success && data.details) {
+        setDbResultModal({
+          title: 'Vacuum Complete',
+          icon: '⚡',
+          details: {
+            'Size Before': formatBytes(data.details.sizeBefore),
+            'Size After': formatBytes(data.details.sizeAfter),
+            'Space Saved': formatBytes(data.details.spaceSaved),
+            'Duration': `${data.details.duration}ms`
+          }
+        });
+      } else if (data.success) {
         setToast({ message: 'Database vacuumed successfully!', type: 'success' });
       } else {
         setToast({ message: data.error || 'Failed to vacuum database', type: 'error' });
@@ -293,7 +317,16 @@ function Settings({ userRole }: SettingsProps) {
         method: 'POST'
       });
       const data = await response.json();
-      if (data.success) {
+      if (data.success && data.details) {
+        setDbResultModal({
+          title: 'Analyze Complete',
+          icon: '📊',
+          details: {
+            'Tables Analyzed': data.details.tablesAnalyzed.toString(),
+            'Duration': `${data.details.duration}ms`
+          }
+        });
+      } else if (data.success) {
         setToast({ message: 'Database analyzed successfully!', type: 'success' });
       } else {
         setToast({ message: data.error || 'Failed to analyze database', type: 'error' });
@@ -312,7 +345,16 @@ function Settings({ userRole }: SettingsProps) {
         method: 'POST'
       });
       const data = await response.json();
-      if (data.success) {
+      if (data.success && data.details) {
+        setDbResultModal({
+          title: 'Reindex Complete',
+          icon: '🔨',
+          details: {
+            'Indexes Rebuilt': data.details.indexesRebuilt.toString(),
+            'Duration': `${data.details.duration}ms`
+          }
+        });
+      } else if (data.success) {
         setToast({ message: 'Database indexes rebuilt successfully!', type: 'success' });
       } else {
         setToast({ message: data.error || 'Failed to rebuild indexes', type: 'error' });
@@ -332,7 +374,14 @@ function Settings({ userRole }: SettingsProps) {
       });
       const data = await response.json();
       if (data.success) {
-        setToast({ message: 'Database backup created successfully!', type: 'success' });
+        setDbResultModal({
+          title: 'Backup Complete',
+          icon: '💾',
+          details: {
+            'Status': 'Backup created successfully',
+            'Time': new Date().toLocaleString()
+          }
+        });
         setLastBackupDate(new Date().toISOString());
       } else {
         setToast({ message: data.error || 'Failed to create backup', type: 'error' });
@@ -1757,6 +1806,33 @@ function Settings({ userRole }: SettingsProps) {
         onConfirm={handleRestartApp}
         onCancel={() => setConfirmRestart(false)}
       />
+
+      {/* Database Result Modal */}
+      {dbResultModal && (
+        <div className="modal-overlay" onClick={() => setDbResultModal(null)}>
+          <div className="db-result-modal" onClick={e => e.stopPropagation()}>
+            <div className="db-result-header">
+              <span className="db-result-icon">{dbResultModal.icon}</span>
+              <h3>{dbResultModal.title}</h3>
+            </div>
+            <div className="db-result-details">
+              {Object.entries(dbResultModal.details).map(([key, value]) => (
+                <div key={key} className="db-result-row">
+                  <span className="db-result-label">{key}</span>
+                  <span className="db-result-value">{value}</span>
+                </div>
+              ))}
+            </div>
+            <button 
+              className="btn btn-primary" 
+              onClick={() => setDbResultModal(null)}
+              style={{ marginTop: '1.5rem', width: '100%' }}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <Toast 

@@ -5250,7 +5250,7 @@ app.get('*', (req, res, next) => {
 
 httpServer = app.listen(PORT, async () => {
   console.log(`Server running on http://localhost:${PORT}`);
-  console.log('Database: SQLite (data/bambu.db)');
+  console.log('Database: SQLite (data/printhive.db)');
   console.log('Available routes:');
   console.log('  - GET  / (login page)');
   console.log('  - POST /auth/login');
@@ -5474,10 +5474,32 @@ app.post('/api/settings/database/vacuum', async (req, res) => {
   }
   
   try {
+    const fs = require('fs');
+    const path = require('path');
+    const dbPath = path.join(__dirname, 'data', 'printhive.db');
+    
+    // Get size before vacuum
+    const sizeBefore = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0;
+    const startTime = Date.now();
+    
     console.log('Starting database vacuum...');
     db.exec('VACUUM');
-    console.log('Database vacuum completed');
-    res.json({ success: true, message: 'Database vacuumed successfully' });
+    
+    const duration = Date.now() - startTime;
+    const sizeAfter = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0;
+    const spaceSaved = sizeBefore - sizeAfter;
+    
+    console.log(`Database vacuum completed in ${duration}ms, saved ${spaceSaved} bytes`);
+    res.json({ 
+      success: true, 
+      message: 'Database vacuumed successfully',
+      details: {
+        sizeBefore: sizeBefore,
+        sizeAfter: sizeAfter,
+        spaceSaved: spaceSaved,
+        duration: duration
+      }
+    });
   } catch (error) {
     console.error('Failed to vacuum database:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -5495,10 +5517,25 @@ app.post('/api/settings/database/analyze', async (req, res) => {
   }
   
   try {
+    const startTime = Date.now();
+    
+    // Count tables before analyze
+    const tables = db.prepare("SELECT COUNT(*) as count FROM sqlite_master WHERE type='table'").get();
+    
     console.log('Starting database analysis...');
     db.exec('ANALYZE');
-    console.log('Database analysis completed');
-    res.json({ success: true, message: 'Database analyzed successfully' });
+    
+    const duration = Date.now() - startTime;
+    console.log(`Database analysis completed in ${duration}ms`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Database analyzed successfully',
+      details: {
+        tablesAnalyzed: tables.count,
+        duration: duration
+      }
+    });
   } catch (error) {
     console.error('Failed to analyze database:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -5516,10 +5553,25 @@ app.post('/api/settings/database/reindex', async (req, res) => {
   }
   
   try {
+    const startTime = Date.now();
+    
+    // Count indexes before reindex
+    const indexes = db.prepare("SELECT COUNT(*) as count FROM sqlite_master WHERE type='index'").get();
+    
     console.log('Starting database reindex...');
     db.exec('REINDEX');
-    console.log('Database reindex completed');
-    res.json({ success: true, message: 'Database indexes rebuilt successfully' });
+    
+    const duration = Date.now() - startTime;
+    console.log(`Database reindex completed in ${duration}ms`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Database indexes rebuilt successfully',
+      details: {
+        indexesRebuilt: indexes.count,
+        duration: duration
+      }
+    });
   } catch (error) {
     console.error('Failed to reindex database:', error);
     res.status(500).json({ success: false, error: error.message });

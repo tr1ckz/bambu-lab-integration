@@ -9,7 +9,7 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-const db = new Database(path.join(dataDir, 'bambu.db'));
+const db = new Database(path.join(dataDir, 'printhive.db'));
 
 // Ensure library directory exists
 const libraryDir = path.join(__dirname, 'library');
