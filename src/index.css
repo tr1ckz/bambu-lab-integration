@@ -1,3 +1,10 @@
+:root {
+  --color-primary: #00d4ff;
+  --color-secondary: #0099ff;
+  --color-gradient-1: #00d4ff;
+  --color-gradient-2: #0099ff;
+}
+
 * {
   margin: 0;
   padding: 0;

@@ -96,6 +96,7 @@ function Settings({ userRole }: SettingsProps) {
   
   // UI settings state
   const [hideBmc, setHideBmc] = useState(false);
+  const [colorScheme, setColorScheme] = useState('cyan');
   const [uiLoading, setUiLoading] = useState(false);
   
   // Watchdog settings state
@@ -266,6 +267,7 @@ function Settings({ userRole }: SettingsProps) {
       const data = await response.json();
       if (data.success) {
         setHideBmc(data.hideBmc || false);
+        setColorScheme(data.colorScheme || 'cyan');
       }
     } catch (error) {
       console.error('Failed to load UI settings:', error);
@@ -278,7 +280,7 @@ function Settings({ userRole }: SettingsProps) {
       const response = await fetch('/api/settings/ui', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hideBmc })
+        body: JSON.stringify({ hideBmc, colorScheme })
       });
       const data = await response.json();
       if (data.success) {
@@ -1673,6 +1675,24 @@ function Settings({ userRole }: SettingsProps) {
           Customize the interface appearance
         </p>
         
+        <div className="form-group">
+          <label>Color Scheme</label>
+          <select
+            value={colorScheme}
+            onChange={(e) => setColorScheme(e.target.value)}
+            disabled={uiLoading}
+            className="form-control"
+          >
+            <option value="cyan">Cyan (Default)</option>
+            <option value="purple">Purple</option>
+            <option value="green">Green</option>
+            <option value="orange">Orange</option>
+            <option value="pink">Pink</option>
+            <option value="blue">Blue</option>
+          </select>
+          <small style={{ color: 'rgba(255,255,255,0.5)', display: 'block', marginTop: '0.5rem' }}>Choose your accent color throughout the app</small>
+        </div>
+
         <div className="toggle-group">
           <label className="toggle-label">
             <input
@@ -2395,7 +2415,7 @@ function Settings({ userRole }: SettingsProps) {
             
             <div className="form-group" style={{ marginBottom: '1rem' }}>
               <label>Available Backups</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '400px', overflowY: 'auto', padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px' }}>
                 {availableBackups.length === 0 ? (
                   <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
                     No backups found. Create a backup using "Backup Now" or place a backup file in /data/backups/

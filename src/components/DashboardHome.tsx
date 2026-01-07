@@ -216,8 +216,8 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ onNavigate }) => {
                 <button onClick={() => onNavigate('history')}>Sync Print History</button>
               </div>
             ) : (
-              <div className="recent-prints-grid">
-                {recentPrints.slice(0, 5).map(print => (
+              <div className="recent-prints-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', maxWidth: '900px', margin: '0 auto' }}>
+                {recentPrints.slice(0, 3).map(print => (
                   <div key={print.id} className="recent-print-card" onClick={() => onNavigate('history')}>
                     <div className="recent-print-cover">
                       {print.cover ? (

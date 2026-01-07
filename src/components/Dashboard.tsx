@@ -117,7 +117,7 @@ function Dashboard({ onLogout }: DashboardProps) {
       <nav className="navbar">
         <div className="navbar-container">
           {/* Logo */}
-          <div className="navbar-brand">
+          <div className="navbar-brand" onClick={() => setActiveTab('home')} style={{ cursor: 'pointer' }}>
             <img src="/images/logo.png" alt="PrintHive" className="navbar-logo" />
             <span className="navbar-title">PrintHive</span>
           </div>

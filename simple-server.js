@@ -812,10 +812,12 @@ app.post('/api/settings/test-printer-ftp', async (req, res) => {
 app.get('/api/settings/ui', (req, res) => {
   try {
     const hideBmc = db.prepare('SELECT value FROM config WHERE key = ?').get('hide_bmc');
+    const colorScheme = db.prepare('SELECT value FROM config WHERE key = ?').get('color_scheme');
     
     res.json({ 
       success: true,
-      hideBmc: hideBmc?.value === 'true'
+      hideBmc: hideBmc?.value === 'true',
+      colorScheme: colorScheme?.value || 'cyan'
     });
   } catch (error) {
     console.error('Failed to load UI settings:', error);
@@ -836,7 +838,7 @@ app.post('/api/settings/ui', (req, res) => {
   }
   
   try {
-    const { hideBmc } = req.body;
+    const { hideBmc, colorScheme } = req.body;
     
     const upsert = db.prepare(`
       INSERT INTO config (key, value, updated_at) 
@@ -845,6 +847,9 @@ app.post('/api/settings/ui', (req, res) => {
     `);
     
     upsert.run('hide_bmc', hideBmc ? 'true' : 'false', hideBmc ? 'true' : 'false');
+    if (colorScheme) {
+      upsert.run('color_scheme', colorScheme, colorScheme);
+    }
     
     res.json({ success: true });
   } catch (error) {
