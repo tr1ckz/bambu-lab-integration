@@ -5419,6 +5419,171 @@ const gracefulShutdown = (signal) => {
   }
 };
 
+// Database Maintenance APIs
+app.get('/api/settings/database', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  try {
+    const settings = {
+      backupScheduleEnabled: db.prepare('SELECT value FROM config WHERE key = ?').get('backup_schedule_enabled')?.value === '1',
+      backupInterval: parseInt(db.prepare('SELECT value FROM config WHERE key = ?').get('backup_interval')?.value || '7'),
+      backupRetention: parseInt(db.prepare('SELECT value FROM config WHERE key = ?').get('backup_retention')?.value || '30'),
+      lastBackupDate: db.prepare('SELECT value FROM config WHERE key = ?').get('last_backup_date')?.value
+    };
+    res.json(settings);
+  } catch (error) {
+    console.error('Failed to load database settings:', error);
+    res.status(500).json({ error: 'Failed to load database settings' });
+  }
+});
+
+app.post('/api/settings/database', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
+  if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  try {
+    const { backupScheduleEnabled, backupInterval, backupRetention } = req.body;
+    
+    db.prepare('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)').run('backup_schedule_enabled', backupScheduleEnabled ? '1' : '0');
+    db.prepare('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)').run('backup_interval', backupInterval.toString());
+    db.prepare('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)').run('backup_retention', backupRetention.toString());
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to save database settings:', error);
+    res.status(500).json({ error: 'Failed to save database settings' });
+  }
+});
+
+app.post('/api/settings/database/vacuum', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
+  if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  try {
+    console.log('Starting database vacuum...');
+    db.exec('VACUUM');
+    console.log('Database vacuum completed');
+    res.json({ success: true, message: 'Database vacuumed successfully' });
+  } catch (error) {
+    console.error('Failed to vacuum database:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/settings/database/analyze', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
+  if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  try {
+    console.log('Starting database analysis...');
+    db.exec('ANALYZE');
+    console.log('Database analysis completed');
+    res.json({ success: true, message: 'Database analyzed successfully' });
+  } catch (error) {
+    console.error('Failed to analyze database:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/settings/database/reindex', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
+  if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  try {
+    console.log('Starting database reindex...');
+    db.exec('REINDEX');
+    console.log('Database reindex completed');
+    res.json({ success: true, message: 'Database indexes rebuilt successfully' });
+  } catch (error) {
+    console.error('Failed to reindex database:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/settings/database/backup', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  const user = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
+  if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    
+    // Create backup directory if it doesn't exist
+    const backupDir = path.join(__dirname, 'data', 'backups');
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    
+    // Create backup file with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0] + '_' + Date.now();
+    const backupFile = path.join(backupDir, `printhive_backup_${timestamp}.db`);
+    
+    console.log(`Creating database backup at ${backupFile}...`);
+    
+    // Use SQLite's backup API
+    const fs_module = require('fs');
+    const dbPath = path.join(__dirname, 'data', 'printhive.db');
+    
+    fs_module.copyFileSync(dbPath, backupFile);
+    
+    console.log(`Database backup completed: ${backupFile}`);
+    
+    // Update last backup date in config
+    db.prepare('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)').run('last_backup_date', new Date().toISOString());
+    
+    // Clean up old backups based on retention policy
+    const retentionDays = parseInt(db.prepare('SELECT value FROM config WHERE key = ?').get('backup_retention')?.value || '30');
+    const retentionMs = retentionDays * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    
+    fs_module.readdirSync(backupDir).forEach(file => {
+      const filePath = path.join(backupDir, file);
+      const stats = fs_module.statSync(filePath);
+      if (now - stats.mtime.getTime() > retentionMs) {
+        fs_module.unlinkSync(filePath);
+        console.log(`Deleted old backup: ${file}`);
+      }
+    });
+    
+    res.json({ success: true, message: 'Database backup created successfully' });
+  } catch (error) {
+    console.error('Failed to backup database:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 // Handle shutdown signals
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

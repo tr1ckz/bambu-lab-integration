@@ -127,6 +127,16 @@ function Settings({ userRole }: SettingsProps) {
   const [restarting, setRestarting] = useState(false);
   const [confirmRestart, setConfirmRestart] = useState(false);
   
+  // Database maintenance state
+  const [dbVacuuming, setDbVacuuming] = useState(false);
+  const [dbAnalyzing, setDbAnalyzing] = useState(false);
+  const [dbRebuildingIndexes, setDbRebuildingIndexes] = useState(false);
+  const [backupScheduleEnabled, setBackupScheduleEnabled] = useState(false);
+  const [backupInterval, setBackupInterval] = useState(7); // days
+  const [backupRetention, setBackupRetention] = useState(30); // days
+  const [dbMaintenanceLoading, setDbMaintenanceLoading] = useState(false);
+  const [lastBackupDate, setLastBackupDate] = useState<string | null>(null);
+  
   // Toast state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
@@ -138,6 +148,7 @@ function Settings({ userRole }: SettingsProps) {
     loadUiSettings();
     loadWatchdogSettings();
     loadDiscordSettings();
+    loadDatabaseSettings();
     loadUserProfile();
     loadCostSettings();
   }, []);
@@ -239,6 +250,122 @@ function Settings({ userRole }: SettingsProps) {
       setTimeout(() => {
         window.location.reload();
       }, 3000);
+    }
+  };
+
+  const loadDatabaseSettings = async () => {
+    try {
+      const response = await fetch('/api/settings/database');
+      const data = await response.json();
+      if (!response.ok) return;
+      setBackupScheduleEnabled(data.backupScheduleEnabled ?? false);
+      setBackupInterval(data.backupInterval ?? 7);
+      setBackupRetention(data.backupRetention ?? 30);
+      setLastBackupDate(data.lastBackupDate ?? null);
+    } catch (error) {
+      console.error('Failed to load database settings:', error);
+    }
+  };
+
+  const handleVacuumDatabase = async () => {
+    setDbVacuuming(true);
+    try {
+      const response = await fetch('/api/settings/database/vacuum', {
+        method: 'POST'
+      });
+      const data = await response.json();
+      if (data.success) {
+        setToast({ message: 'Database vacuumed successfully!', type: 'success' });
+      } else {
+        setToast({ message: data.error || 'Failed to vacuum database', type: 'error' });
+      }
+    } catch (error) {
+      setToast({ message: 'Failed to vacuum database', type: 'error' });
+    } finally {
+      setDbVacuuming(false);
+    }
+  };
+
+  const handleAnalyzeDatabase = async () => {
+    setDbAnalyzing(true);
+    try {
+      const response = await fetch('/api/settings/database/analyze', {
+        method: 'POST'
+      });
+      const data = await response.json();
+      if (data.success) {
+        setToast({ message: 'Database analyzed successfully!', type: 'success' });
+      } else {
+        setToast({ message: data.error || 'Failed to analyze database', type: 'error' });
+      }
+    } catch (error) {
+      setToast({ message: 'Failed to analyze database', type: 'error' });
+    } finally {
+      setDbAnalyzing(false);
+    }
+  };
+
+  const handleRebuildIndexes = async () => {
+    setDbRebuildingIndexes(true);
+    try {
+      const response = await fetch('/api/settings/database/reindex', {
+        method: 'POST'
+      });
+      const data = await response.json();
+      if (data.success) {
+        setToast({ message: 'Database indexes rebuilt successfully!', type: 'success' });
+      } else {
+        setToast({ message: data.error || 'Failed to rebuild indexes', type: 'error' });
+      }
+    } catch (error) {
+      setToast({ message: 'Failed to rebuild indexes', type: 'error' });
+    } finally {
+      setDbRebuildingIndexes(false);
+    }
+  };
+
+  const handleBackupNow = async () => {
+    setDbMaintenanceLoading(true);
+    try {
+      const response = await fetch('/api/settings/database/backup', {
+        method: 'POST'
+      });
+      const data = await response.json();
+      if (data.success) {
+        setToast({ message: 'Database backup created successfully!', type: 'success' });
+        setLastBackupDate(new Date().toISOString());
+      } else {
+        setToast({ message: data.error || 'Failed to create backup', type: 'error' });
+      }
+    } catch (error) {
+      setToast({ message: 'Failed to create backup', type: 'error' });
+    } finally {
+      setDbMaintenanceLoading(false);
+    }
+  };
+
+  const handleSaveDatabaseSettings = async () => {
+    setDbMaintenanceLoading(true);
+    try {
+      const response = await fetch('/api/settings/database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          backupScheduleEnabled,
+          backupInterval,
+          backupRetention
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setToast({ message: 'Database settings saved!', type: 'success' });
+      } else {
+        setToast({ message: data.error || 'Failed to save database settings', type: 'error' });
+      }
+    } catch (error) {
+      setToast({ message: 'Failed to save database settings', type: 'error' });
+    } finally {
+      setDbMaintenanceLoading(false);
     }
   };
 
@@ -1464,6 +1591,120 @@ function Settings({ userRole }: SettingsProps) {
               disabled={restarting}
             >
               {restarting ? 'Restarting...' : 'Restart App'}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ marginTop: '2rem', borderTop: '1px solid rgba(0, 212, 255, 0.2)', paddingTop: '2rem' }}>
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#fff', marginBottom: '1rem' }}>🗄️ Database Maintenance</h3>
+          <p className="form-description" style={{ marginBottom: '1.5rem' }}>
+            Optimize database performance with maintenance tasks
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+            <button 
+              type="button" 
+              className="btn btn-secondary" 
+              onClick={handleVacuumDatabase}
+              disabled={dbVacuuming || dbMaintenanceLoading}
+              title="Removes unused space from the database"
+            >
+              {dbVacuuming ? 'Vacuuming...' : '⚡ Vacuum DB'}
+            </button>
+            
+            <button 
+              type="button" 
+              className="btn btn-secondary" 
+              onClick={handleAnalyzeDatabase}
+              disabled={dbAnalyzing || dbMaintenanceLoading}
+              title="Analyzes query statistics to optimize performance"
+            >
+              {dbAnalyzing ? 'Analyzing...' : '📊 Analyze DB'}
+            </button>
+
+            <button 
+              type="button" 
+              className="btn btn-secondary" 
+              onClick={handleRebuildIndexes}
+              disabled={dbRebuildingIndexes || dbMaintenanceLoading}
+              title="Rebuilds all database indexes for optimal query performance"
+            >
+              {dbRebuildingIndexes ? 'Rebuilding...' : '🔨 Rebuild Indexes'}
+            </button>
+
+            <button 
+              type="button" 
+              className="btn btn-secondary" 
+              onClick={handleBackupNow}
+              disabled={dbMaintenanceLoading}
+              title="Create a backup of the database now"
+            >
+              {dbMaintenanceLoading ? 'Backing Up...' : '💾 Backup Now'}
+            </button>
+          </div>
+
+          {lastBackupDate && (
+            <div style={{ padding: '0.75rem', background: 'rgba(0, 212, 255, 0.1)', borderRadius: '8px', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
+              Last backup: {new Date(lastBackupDate).toLocaleString()}
+            </div>
+          )}
+
+          <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(0, 212, 255, 0.2)' }}>
+            <h4 style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', marginBottom: '1rem' }}>Backup Schedule</h4>
+            
+            <div className="toggle-group">
+              <label className="toggle-label">
+                <input
+                  type="checkbox"
+                  checked={backupScheduleEnabled}
+                  onChange={(e) => setBackupScheduleEnabled(e.target.checked)}
+                  disabled={dbMaintenanceLoading}
+                />
+                <span className="toggle-text">Enable automatic backups</span>
+              </label>
+            </div>
+
+            {backupScheduleEnabled && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label>Backup Interval (days)</label>
+                  <input
+                    type="number"
+                    value={backupInterval}
+                    onChange={(e) => setBackupInterval(parseInt(e.target.value) || 7)}
+                    placeholder="7"
+                    min="1"
+                    max="365"
+                    disabled={dbMaintenanceLoading}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Retention Period (days)</label>
+                  <input
+                    type="number"
+                    value={backupRetention}
+                    onChange={(e) => setBackupRetention(parseInt(e.target.value) || 30)}
+                    placeholder="30"
+                    min="1"
+                    max="365"
+                    disabled={dbMaintenanceLoading}
+                  />
+                  <small style={{ color: 'rgba(255,255,255,0.5)', display: 'block', marginTop: '0.5rem' }}>
+                    Older backups will be automatically deleted
+                  </small>
+                </div>
+              </div>
+            )}
+
+            <button 
+              type="button" 
+              className="btn btn-primary" 
+              onClick={handleSaveDatabaseSettings}
+              disabled={dbMaintenanceLoading}
+              style={{ marginTop: '1rem' }}
+            >
+              {dbMaintenanceLoading ? 'Saving...' : 'Save Backup Settings'}
             </button>
           </div>
         </div>
