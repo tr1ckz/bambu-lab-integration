@@ -5663,6 +5663,7 @@ app.post('/api/settings/database/backup', async (req, res) => {
   try {
     const fs = require('fs');
     const path = require('path');
+    const tar = require('tar');
     
     // Create backup directory if it doesn't exist
     const backupDir = path.join(__dirname, 'data', 'backups');
@@ -5670,43 +5671,121 @@ app.post('/api/settings/database/backup', async (req, res) => {
       fs.mkdirSync(backupDir, { recursive: true });
     }
     
+    // Get backup options from request
+    const includeVideos = req.body.includeVideos !== false;
+    const includeLibrary = req.body.includeLibrary !== false;
+    const includeCovers = req.body.includeCovers !== false;
+    
     // Create backup file with timestamp
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0] + '_' + Date.now();
-    const backupFileName = `printhive_backup_${timestamp}.db`;
+    const backupFileName = `printhive_backup_${timestamp}.tar.gz`;
     const backupFile = path.join(backupDir, backupFileName);
     
-    console.log(`Creating database backup at ${backupFile}...`);
+    console.log(`Creating backup archive at ${backupFile}...`);
+    console.log(`Options: Videos=${includeVideos}, Library=${includeLibrary}, Covers=${includeCovers}`);
     
-    // Use SQLite's backup API
-    const fs_module = require('fs');
-    const dbPath = path.join(__dirname, 'data', 'printhive.db');
+    // Prepare list of files/folders to include in backup
+    const filesToBackup = [];
+    const dataDir = path.join(__dirname, 'data');
     
-    fs_module.copyFileSync(dbPath, backupFile);
+    // Always include the database
+    filesToBackup.push('printhive.db');
+    filesToBackup.push('printhive.db-shm');
+    filesToBackup.push('printhive.db-wal');
     
-    console.log(`Database backup completed: ${backupFile}`);
+    // Count items for reporting
+    let videoCount = 0;
+    let libraryCount = 0;
+    let coverCount = 0;
+    
+    // Include videos if requested
+    if (includeVideos) {
+      const videosPath = path.join(dataDir, 'videos');
+      if (fs.existsSync(videosPath)) {
+        const videos = fs.readdirSync(videosPath).filter(f => f.endsWith('.avi') || f.endsWith('.mp4') || f.endsWith('.webm'));
+        if (videos.length > 0) {
+          filesToBackup.push('videos/');
+          videoCount = videos.length;
+        }
+      }
+    }
+    
+    // Include library files if requested
+    if (includeLibrary) {
+      const libraryPath = path.join(dataDir, 'library');
+      if (fs.existsSync(libraryPath)) {
+        const libraryFiles = fs.readdirSync(libraryPath).filter(f => f.endsWith('.3mf') || f.endsWith('.stl') || f.endsWith('.gcode'));
+        if (libraryFiles.length > 0) {
+          filesToBackup.push('library/');
+          libraryCount = libraryFiles.length;
+        }
+      }
+    }
+    
+    // Include cover images if requested
+    if (includeCovers) {
+      const coversPath = path.join(__dirname, 'public', 'images', 'covers');
+      if (fs.existsSync(coversPath)) {
+        const coverFiles = fs.readdirSync(coversPath).filter(f => 
+          f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.png') || f.endsWith('.webp')
+        );
+        if (coverFiles.length > 0) {
+          // For covers, we need to handle them specially since they're outside data/
+          coverCount = coverFiles.length;
+        }
+      }
+    }
+    
+    // Create tar.gz archive
+    await tar.create(
+      {
+        gzip: true,
+        file: backupFile,
+        cwd: dataDir,
+        filter: (path, stat) => {
+          // Exclude backup files themselves
+          if (path.includes('backups/')) return false;
+          // Exclude temp files
+          if (path.includes('temp/')) return false;
+          return true;
+        }
+      },
+      filesToBackup
+    );
+    
+    // If covers are included, we need to add them separately since they're in public/
+    if (includeCovers && coverCount > 0) {
+      await tar.update(
+        {
+          gzip: true,
+          file: backupFile,
+          cwd: path.join(__dirname, 'public', 'images'),
+        },
+        ['covers/']
+      );
+    }
+    
+    console.log(`Backup archive created: ${backupFile}`);
+    console.log(`Included: ${videoCount} videos, ${libraryCount} library files, ${coverCount} cover images`);
     
     // Update last backup date in config
     db.prepare('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)').run('last_backup_date', new Date().toISOString());
     
     // Get backup file size
-    const backupStats = fs_module.statSync(backupFile);
+    const backupStats = fs.statSync(backupFile);
     const backupSize = formatBytes(backupStats.size);
-    
-    // Get backup options from request
-    const includeVideos = req.body.includeVideos !== false;
-    const includeLibrary = req.body.includeLibrary !== false;
-    const includeCovers = req.body.includeCovers !== false;
     
     // Clean up old backups based on retention policy
     const retentionDays = parseInt(db.prepare('SELECT value FROM config WHERE key = ?').get('backup_retention')?.value || '30');
     const retentionMs = retentionDays * 24 * 60 * 60 * 1000;
     const now = Date.now();
     
-    fs_module.readdirSync(backupDir).forEach(file => {
+    fs.readdirSync(backupDir).forEach(file => {
+      if (!file.endsWith('.tar.gz')) return; // Only clean up tar.gz backups
       const filePath = path.join(backupDir, file);
-      const stats = fs_module.statSync(filePath);
+      const stats = fs.statSync(filePath);
       if (now - stats.mtime.getTime() > retentionMs) {
-        fs_module.unlinkSync(filePath);
+        fs.unlinkSync(filePath);
         console.log(`Deleted old backup: ${file}`);
       }
     });
@@ -5781,13 +5860,13 @@ app.post('/api/settings/database/backup', async (req, res) => {
     
     res.json({ 
       success: true, 
-      message: remoteUploaded ? 'Backup created and uploaded to remote server' : 'Database backup created successfully',
+      message: remoteUploaded ? 'Backup created and uploaded to remote server' : 'Backup archive created successfully',
       remoteUploaded,
       details: {
-        databaseSize: backupSize,
-        Videos: includeVideos ? 'Included' : 'Excluded',
-        'Library Files': includeLibrary ? 'Included' : 'Excluded',
-        'Cover Images': includeCovers ? 'Included' : 'Excluded',
+        'Archive Size': backupSize,
+        Videos: includeVideos ? `Included (${videoCount} files)` : 'Excluded',
+        'Library Files': includeLibrary ? `Included (${libraryCount} files)` : 'Excluded',
+        'Cover Images': includeCovers ? `Included (${coverCount} files)` : 'Excluded',
         Time: new Date().toLocaleString()
       }
     });
@@ -5892,7 +5971,7 @@ app.get('/api/settings/database/backups', (req, res) => {
     }
     
     const backups = fs.readdirSync(backupDir)
-      .filter(file => file.endsWith('.db') || file.endsWith('.zip'))
+      .filter(file => file.endsWith('.tar.gz'))
       .map(file => {
         const filePath = path.join(backupDir, file);
         const stats = fs.statSync(filePath);
@@ -5932,34 +6011,124 @@ app.post('/api/settings/database/restore', async (req, res) => {
     
     const fs = require('fs');
     const path = require('path');
+    const tar = require('tar');
     const backupPath = path.join(__dirname, 'data', 'backups', backupFile);
-    const dbPath = path.join(__dirname, 'data', 'printhive.db');
     
     if (!fs.existsSync(backupPath)) {
       return res.status(404).json({ success: false, error: 'Backup file not found' });
     }
     
-    console.log(`Restoring database from ${backupFile}...`);
+    if (!backupFile.endsWith('.tar.gz')) {
+      return res.status(400).json({ success: false, error: 'Invalid backup file format. Expected .tar.gz' });
+    }
+    
+    console.log(`Restoring from backup archive ${backupFile}...`);
     
     // Close existing database connection
     db.close();
     
-    // Copy backup file to database location
-    fs.copyFileSync(backupPath, dbPath);
+    // Create a temporary extraction directory
+    const tempExtractDir = path.join(__dirname, 'data', 'temp_restore');
+    if (fs.existsSync(tempExtractDir)) {
+      fs.rmSync(tempExtractDir, { recursive: true, force: true });
+    }
+    fs.mkdirSync(tempExtractDir, { recursive: true });
     
-    console.log(`Database restored from ${backupFile}`);
+    // Extract tar.gz to temp directory
+    await tar.extract({
+      file: backupPath,
+      cwd: tempExtractDir
+    });
+    
+    console.log(`Archive extracted to ${tempExtractDir}`);
+    
+    // Restore database files
+    const dataDir = path.join(__dirname, 'data');
+    if (fs.existsSync(path.join(tempExtractDir, 'printhive.db'))) {
+      fs.copyFileSync(path.join(tempExtractDir, 'printhive.db'), path.join(dataDir, 'printhive.db'));
+      console.log('✓ Database restored');
+    }
+    if (fs.existsSync(path.join(tempExtractDir, 'printhive.db-shm'))) {
+      fs.copyFileSync(path.join(tempExtractDir, 'printhive.db-shm'), path.join(dataDir, 'printhive.db-shm'));
+    }
+    if (fs.existsSync(path.join(tempExtractDir, 'printhive.db-wal'))) {
+      fs.copyFileSync(path.join(tempExtractDir, 'printhive.db-wal'), path.join(dataDir, 'printhive.db-wal'));
+    }
+    
+    // Restore videos if present
+    const videosBackupPath = path.join(tempExtractDir, 'videos');
+    if (fs.existsSync(videosBackupPath)) {
+      const videosDir = path.join(dataDir, 'videos');
+      if (!fs.existsSync(videosDir)) {
+        fs.mkdirSync(videosDir, { recursive: true });
+      }
+      // Copy all video files
+      const videoFiles = fs.readdirSync(videosBackupPath);
+      videoFiles.forEach(file => {
+        fs.copyFileSync(path.join(videosBackupPath, file), path.join(videosDir, file));
+      });
+      console.log(`✓ Restored ${videoFiles.length} video files`);
+    }
+    
+    // Restore library files if present
+    const libraryBackupPath = path.join(tempExtractDir, 'library');
+    if (fs.existsSync(libraryBackupPath)) {
+      const libraryDirPath = path.join(dataDir, 'library');
+      if (!fs.existsSync(libraryDirPath)) {
+        fs.mkdirSync(libraryDirPath, { recursive: true });
+      }
+      // Copy all library files
+      const libraryFiles = fs.readdirSync(libraryBackupPath);
+      libraryFiles.forEach(file => {
+        fs.copyFileSync(path.join(libraryBackupPath, file), path.join(libraryDirPath, file));
+      });
+      console.log(`✓ Restored ${libraryFiles.length} library files`);
+    }
+    
+    // Restore cover images if present
+    const coversBackupPath = path.join(tempExtractDir, 'covers');
+    if (fs.existsSync(coversBackupPath)) {
+      const coversDir = path.join(__dirname, 'public', 'images', 'covers');
+      if (!fs.existsSync(coversDir)) {
+        fs.mkdirSync(coversDir, { recursive: true });
+      }
+      // Copy all cover files
+      const coverFiles = fs.readdirSync(coversBackupPath);
+      coverFiles.forEach(file => {
+        fs.copyFileSync(path.join(coversBackupPath, file), path.join(coversDir, file));
+      });
+      console.log(`✓ Restored ${coverFiles.length} cover images`);
+    }
+    
+    // Clean up temp directory
+    fs.rmSync(tempExtractDir, { recursive: true, force: true });
+    console.log('✓ Cleanup complete');
+    
+    console.log(`Restore from ${backupFile} completed successfully`);
     
     // Reconnect to database
     const Database = require('better-sqlite3');
+    const dbPath = path.join(__dirname, 'data', 'printhive.db');
     db = new Database(dbPath);
     db.pragma('journal_mode = WAL');
     
     res.json({ 
       success: true, 
-      message: 'Database restored successfully. Please refresh the page.'
+      message: 'Backup restored successfully. Please refresh the page to see your restored data.'
     });
   } catch (error) {
-    console.error('Failed to restore database:', error);
+    console.error('Failed to restore backup:', error);
+    
+    // Try to reconnect to database even if restore failed
+    try {
+      const Database = require('better-sqlite3');
+      const dbPath = path.join(__dirname, 'data', 'printhive.db');
+      db = new Database(dbPath);
+      db.pragma('journal_mode = WAL');
+    } catch (reconnectError) {
+      console.error('Failed to reconnect to database after restore error:', reconnectError);
+    }
+    
     res.status(500).json({ success: false, error: error.message });
   }
 });

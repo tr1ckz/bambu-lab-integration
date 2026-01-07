@@ -425,9 +425,9 @@ function Settings({ userRole }: SettingsProps) {
         setDbResultModal({
           title: 'Backup Complete',
           icon: '💾',
-          details: {
+          details: data.details || {
             'Status': 'Backup created successfully',
-            'Database Size': data.details?.databaseSize || 'N/A',
+            'Archive Size': 'N/A',
             'Videos': backupIncludeVideos ? 'Included' : 'Excluded',
             'Library Files': backupIncludeLibrary ? 'Included' : 'Excluded',
             'Cover Images': backupIncludeCovers ? 'Included' : 'Excluded',
