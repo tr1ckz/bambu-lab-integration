@@ -71,13 +71,14 @@ function LoadingSplash({
               {countdown}s
             </div>
             {showRefreshButton && (
-              <button 
-                className="btn btn-primary" 
-                onClick={() => window.location.reload()}
-                style={{ marginTop: '1rem' }}
-              >
-                Refresh
-              </button>
+              <div className="loading-refresh-container">
+                <button 
+                  className="btn btn-primary" 
+                  onClick={() => window.location.reload()}
+                >
+                  Refresh
+                </button>
+              </div>
             )}
           </>
         )}

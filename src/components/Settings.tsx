@@ -144,6 +144,22 @@ function Settings({ userRole }: SettingsProps) {
   const [printerWattage, setPrinterWattage] = useState(150);
   const [costCurrency, setCostCurrency] = useState('USD');
   const [costLoading, setCostLoading] = useState(false);
+  // Material-specific costs ($/kg)
+  const [materialCosts, setMaterialCosts] = useState<Record<string, number>>({
+    PLA: 20,
+    'PLA-CF': 35,
+    PETG: 25,
+    ABS: 25,
+    TPU: 40,
+    'PLA-Glow': 30,
+    'PLA-Silk': 28,
+    'PLA-Matte': 22,
+    ASA: 30,
+    PA: 50,
+    'PA-CF': 70,
+    PVA: 45,
+    HIPS: 30
+  });
   
   // System state
   const [restarting, setRestarting] = useState(false);
@@ -1043,6 +1059,9 @@ function Settings({ userRole }: SettingsProps) {
       setElectricityCostPerKwh(data.electricityCostPerKwh ?? 0.12);
       setPrinterWattage(data.printerWattage ?? 150);
       setCostCurrency(data.currency ?? 'USD');
+      if (data.materialCosts) {
+        setMaterialCosts(data.materialCosts);
+      }
     } catch (error) {
       console.error('Failed to load cost settings:', error);
     }
@@ -1058,7 +1077,8 @@ function Settings({ userRole }: SettingsProps) {
           filamentCostPerKg,
           electricityCostPerKwh,
           printerWattage,
-          currency: costCurrency
+          currency: costCurrency,
+          materialCosts
         })
       });
       const data = await response.json();
@@ -1693,6 +1713,33 @@ function Settings({ userRole }: SettingsProps) {
           <small style={{ color: 'rgba(255,255,255,0.5)', display: 'block', marginTop: '0.5rem' }}>
             Average power consumption (typically 100-200W)
           </small>
+        </div>
+
+        <div className="form-group" style={{ marginTop: '2rem' }}>
+          <label>Material-Specific Pricing ($/kg)</label>
+          <small style={{ color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '1rem' }}>
+            Set individual prices per material type. Leave blank to use default filament cost.
+          </small>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
+            {Object.entries(materialCosts).sort(([a], [b]) => a.localeCompare(b)).map(([material, cost]) => (
+              <div key={material} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <label style={{ minWidth: '80px', fontSize: '0.9rem' }}>{material}:</label>
+                <input
+                  type="number"
+                  value={cost}
+                  onChange={(e) => setMaterialCosts(prev => ({
+                    ...prev,
+                    [material]: parseFloat(e.target.value) || 0
+                  }))}
+                  placeholder="0"
+                  min="0"
+                  step="0.01"
+                  disabled={costLoading}
+                  style={{ flex: 1, minWidth: '80px' }}
+                />
+              </div>
+            ))}
+          </div>
         </div>
         
         <button 

@@ -67,6 +67,16 @@
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
+/* Position the refresh button 25% up from bottom */
+.loading-refresh-container {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 25%;
+  display: flex;
+  justify-content: center;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }

@@ -1691,8 +1691,15 @@ app.get('/api/models', async (req, res) => {
     try {
       console.log('Searching database with:', { search, status });
       const dbPrints = searchPrintsInDb(search || '', status ? parseInt(status) : null);
-      console.log(`Found ${dbPrints.length} prints in database`);
-      return res.json({ models: dbPrints, hits: dbPrints, total: dbPrints.length, source: 'db' });
+      
+      // Add cost calculation to each print
+      const printsWithCost = dbPrints.map(print => ({
+        ...print,
+        estimatedCost: calculatePrintCost(print)
+      }));
+      
+      console.log(`Found ${printsWithCost.length} prints in database`);
+      return res.json({ models: printsWithCost, hits: printsWithCost, total: printsWithCost.length, source: 'db' });
     } catch (error) {
       console.error('Database search error:', error.message);
       // Fall through to API call
@@ -1704,8 +1711,14 @@ app.get('/api/models', async (req, res) => {
     try {
       const dbPrints = getAllPrintsFromDb();
       if (dbPrints.length > 0) {
-        console.log(`Returning ${dbPrints.length} prints from database cache`);
-        return res.json({ models: dbPrints, hits: dbPrints, total: dbPrints.length, source: 'cache' });
+        // Add cost calculation to each print
+        const printsWithCost = dbPrints.map(print => ({
+          ...print,
+          estimatedCost: calculatePrintCost(print)
+        }));
+        
+        console.log(`Returning ${printsWithCost.length} prints from database cache`);
+        return res.json({ models: printsWithCost, hits: printsWithCost, total: printsWithCost.length, source: 'cache' });
       }
       console.log('Database is empty, fetching from API...');
     } catch (error) {
@@ -1748,8 +1761,15 @@ app.get('/api/models', async (req, res) => {
     console.log('API failed, falling back to database...');
     try {
       const dbPrints = getAllPrintsFromDb();
-      console.log(`Returning ${dbPrints.length} prints from database`);
-      return res.json({ hits: dbPrints, total: dbPrints.length, source: 'cache' });
+      
+      // Add cost calculation to each print
+      const printsWithCost = dbPrints.map(print => ({
+        ...print,
+        estimatedCost: calculatePrintCost(print)
+      }));
+      
+      console.log(`Returning ${printsWithCost.length} prints from database`);
+      return res.json({ hits: printsWithCost, total: printsWithCost.length, source: 'cache' });
     } catch (dbError) {
       console.error('Database fallback error:', dbError.message);
       res.status(500).json({ error: 'Failed to fetch models' });
@@ -3813,6 +3833,18 @@ app.get('/api/settings/costs', (req, res) => {
       settings[key] = row ? parseFloat(row.value) || row.value : null;
     }
     
+    // Get material-specific costs
+    const materialCostsRow = db.prepare('SELECT value FROM config WHERE key = ?').get('cost_materialCosts');
+    if (materialCostsRow) {
+      try {
+        settings.materialCosts = JSON.parse(materialCostsRow.value);
+      } catch (e) {
+        settings.materialCosts = {};
+      }
+    } else {
+      settings.materialCosts = {};
+    }
+    
     // Defaults
     settings.filamentCostPerKg = settings.filamentCostPerKg ?? 25;
     settings.electricityCostPerKwh = settings.electricityCostPerKwh ?? 0.12;
@@ -3828,7 +3860,7 @@ app.get('/api/settings/costs', (req, res) => {
 
 // Save cost settings
 app.post('/api/settings/costs', requireAdmin, (req, res) => {
-  const { filamentCostPerKg, electricityCostPerKwh, printerWattage, currency } = req.body;
+  const { filamentCostPerKg, electricityCostPerKwh, printerWattage, currency, materialCosts } = req.body;
   
   try {
     const upsert = db.prepare(`
@@ -3842,12 +3874,70 @@ app.post('/api/settings/costs', requireAdmin, (req, res) => {
     upsert.run('cost_printerWattage', printerWattage, printerWattage);
     upsert.run('cost_currency', currency, currency);
     
+    // Save material-specific costs as JSON
+    if (materialCosts) {
+      const materialCostsJson = JSON.stringify(materialCosts);
+      upsert.run('cost_materialCosts', materialCostsJson, materialCostsJson);
+    }
+    
     res.json({ success: true });
   } catch (error) {
     console.error('Save cost settings error:', error);
     res.status(500).json({ error: 'Failed to save cost settings' });
   }
 });
+
+// Helper function to calculate cost for a print
+function calculatePrintCost(print) {
+  try {
+    const getCostSetting = (key, defaultValue) => {
+      const row = db.prepare('SELECT value FROM config WHERE key = ?').get(`cost_${key}`);
+      return row ? parseFloat(row.value) || defaultValue : defaultValue;
+    };
+    
+    const filamentCostPerKg = getCostSetting('filamentCostPerKg', 25);
+    const electricityCostPerKwh = getCostSetting('electricityCostPerKwh', 0.12);
+    const printerWattage = getCostSetting('printerWattage', 150);
+    
+    // Get material-specific costs
+    const materialCostsRow = db.prepare('SELECT value FROM config WHERE key = ?').get('cost_materialCosts');
+    let materialCosts = {};
+    if (materialCostsRow) {
+      try {
+        materialCosts = JSON.parse(materialCostsRow.value);
+      } catch (e) {}
+    }
+    
+    const weight = parseFloat(print.weight) || 0; // grams
+    const costTime = parseInt(print.costTime) || 0; // seconds
+    
+    // Parse material from the material JSON field (e.g., {"1": "PLA"})
+    let materialType = null;
+    if (print.material) {
+      try {
+        const matObj = typeof print.material === 'string' ? JSON.parse(print.material) : print.material;
+        // Get the first material type from the object
+        materialType = Object.values(matObj)[0];
+      } catch (e) {}
+    }
+    
+    // Use material-specific cost if available, otherwise use default
+    const costPerKg = (materialType && materialCosts[materialType]) ? materialCosts[materialType] : filamentCostPerKg;
+    
+    // Calculate filament cost (weight in grams / 1000 to get kg)
+    const filamentCost = (weight / 1000) * costPerKg;
+    
+    // Calculate electricity cost (seconds / 3600 to get hours * wattage / 1000 to get kWh)
+    const electricityCost = (costTime / 3600) * (printerWattage / 1000) * electricityCostPerKwh;
+    
+    const totalCost = filamentCost + electricityCost;
+    
+    return totalCost;
+  } catch (error) {
+    console.error('Error calculating print cost:', error);
+    return 0;
+  }
+}
 
 // Calculate costs for prints
 app.get('/api/statistics/costs', async (req, res) => {

@@ -21,6 +21,8 @@ interface Print {
   files: string[];
   has3mf: boolean;
   hasVideo: boolean;
+  material?: string;
+  estimatedCost?: number;
 }
 
 const ITEMS_PER_PAGE = 12;
@@ -477,8 +479,12 @@ const PrintHistory: React.FC = () => {
                       <span className="meta-value">{(print.weight || 0).toFixed(1)}g</span>
                     </div>
                     <div className="meta-item">
-                      <span className="meta-label">Profile</span>
-                      <span className="meta-value">{print.profileName || 'N/A'}</span>
+                      <span className="meta-label">Cost</span>
+                      <span className="meta-value">
+                        {print.estimatedCost !== undefined && print.estimatedCost > 0
+                          ? `$${print.estimatedCost.toFixed(2)}`
+                          : 'N/A'}
+                      </span>
                     </div>
                     <div className="meta-item">
                       <span className="meta-label">Started</span>
