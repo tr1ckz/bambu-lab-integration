@@ -1,19 +1,22 @@
 # PrintHive - 3D Printer Management
 
+**Version: 1.1.0** | [View Changelog](#changelog)
+
 A comprehensive web application for managing 3D printers, including print history tracking, model library management, real-time printer monitoring via MQTT, cloud synchronization with Bambu MakerWorld, and complete database backup & maintenance tools.
 
 ## Features
 
 ### Core Features
 - **Authentication**: Secure login with OIDC support (Authentik, Keycloak, Auth0, etc.)
-- **Print History**: Track all your prints with cover images from MakerWorld, paginated display
+- **Print History**: Track all your prints with cover images from MakerWorld, paginated display, per-device filtering
 - **Model Library**: Upload and manage your 3D model files (.3mf, .stl, .gcode)
-- **Printer Monitoring**: Real-time status updates via MQTT
+- **Printer Monitoring**: Real-time status updates via MQTT including AMS data
 - **Cloud Sync**: Automatic synchronization with Bambu Cloud
 - **Timelapse Videos**: Download and convert print timelapses
 - **Statistics**: View print success rates and analytics
 - **Duplicate Detection**: Find duplicate models in your library
 - **User Management**: Multi-user support with admin controls
+- **Dynamic Theming**: Customizable accent colors applied throughout the app
 
 ### Database & Maintenance
 - **Database Maintenance**: Vacuum, Analyze, and Reindex operations with detailed results
@@ -23,16 +26,23 @@ A comprehensive web application for managing 3D printers, including print histor
 - **Settings Management**: Organized settings with collapsible categories
 
 ### Printer Maintenance
-- **Maintenance Tracking**: Track scheduled printer maintenance tasks
-- **Maintenance Intervals**: Set maintenance schedules for different printer models
-- **Maintenance Alerts**: Get notified via Discord when maintenance is due
+- **Maintenance Tracking**: Track scheduled printer maintenance tasks with history logs
+- **Maintenance Intervals**: Set maintenance schedules based on print hours
+- **Per-Device Maintenance**: Track maintenance separately for each printer
+- **Maintenance History**: View completion history for each task
 - **Task Management**: Mark maintenance tasks as complete and track history
+- **Maintenance Alerts**: Get notified via Discord when maintenance is due
 
 ### Integrations
 - **Discord Webhooks**: Get notifications for print failures and maintenance alerts
-- **MQTT Monitoring**: Real-time printer status updates
+- **MQTT Monitoring**: Real-time printer status and AMS updates
 - **SFTP/FTP Backup**: Upload database backups to remote servers
 - **OAuth/SSO**: Enterprise authentication with OIDC providers
+
+### Infrastructure
+- **Container-Safe Supervision**: Watchdog process manager that doesn't kill containers on app restart
+- **Configurable Logging**: Dynamic log level control (DEBUG/INFO/WARNING/ERROR) in Settings
+- **Version Tracking**: Automatic semantic versioning from package.json
 
 ## Quick Start
 
@@ -270,6 +280,30 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 - Configure HTTPS in production deployments
 - Passwords in database settings are masked (only updated if explicitly changed)
 - Remote backup credentials are stored encrypted in config
+
+## Changelog
+
+### v1.1.0 (2026-01-08)
+- ✨ Added 10-second countdown to restart splash screen with manual refresh fallback
+- ✨ Added filter UI to maintenance tasks for viewing/deleting old tasks
+- ✨ Auto-refresh on server recovery when app restarts
+- ✨ Added `/api/version` endpoint for version tracking
+- 🔧 Removed LOG_LEVEL from docker-compose (now managed in Settings)
+- 🐛 Fixed splash screen to remove spinning animation and use splash.png background
+- 📝 Improved maintenance task display with per-device filtering
+- 🚀 Bump to semantic versioning with automatic sync
+
+### v1.0.0 (Initial Release)
+- 🎉 Full 3D printer management system
+- 📊 Print history and statistics
+- 🖼️ Model library with MakerWorld integration
+- 🔄 Real-time MQTT monitoring with AMS support
+- 🛡️ OIDC authentication with role-based access
+- 🔐 Database maintenance and backup tools
+- 📋 Maintenance task tracking with history
+- 🐳 Docker container with watchdog process management
+- 🎨 Dynamic theme customization
+- 📱 Responsive web UI
 
 ## License
 

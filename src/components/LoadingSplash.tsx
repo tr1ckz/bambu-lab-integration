@@ -15,6 +15,25 @@ function LoadingSplash({
   checkServerHealth = false
 }: LoadingSplashProps) {
   const [serverReady, setServerReady] = useState(false);
+  const [countdown, setCountdown] = useState(10);
+  const [showRefreshButton, setShowRefreshButton] = useState(false);
+
+  // 10-second countdown fallback
+  useEffect(() => {
+    if (!checkServerHealth || serverReady) return;
+
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          setShowRefreshButton(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [checkServerHealth, serverReady]);
 
   // Auto-refresh when server comes back up
   useEffect(() => {
@@ -46,7 +65,22 @@ function LoadingSplash({
   return (
     <div className="loading-splash" style={{ backgroundImage: `url(/images/splash.png)` }}>
       <div className="loading-content">
-        <h1>PrintHive</h1>
+        {checkServerHealth && !serverReady && (
+          <>
+            <div className="loading-countdown">
+              {countdown}s
+            </div>
+            {showRefreshButton && (
+              <button 
+                className="btn btn-primary" 
+                onClick={() => window.location.reload()}
+                style={{ marginTop: '1rem' }}
+              >
+                Refresh
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       {progress !== undefined && (

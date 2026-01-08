@@ -37,14 +37,20 @@ docker run -d --name printhive -p 3000:3000 -e PORT=3000 printhive:latest
 
 ## Configuration
 
-Create a `.env` file or set environment variables:
+Create a `.env` file or set environment variables. Most settings can also be configured via the web interface Settings page:
+
 ```bash
-BAMBU_HOST=192.168.1.100
-BAMBU_ACCESS_CODE=your_access_code
-BAMBU_SERIAL=your_serial_number
 PORT=3000                   # Change this to use a different port
 HOST_PORT=3000             # For docker-compose: host machine port
+SESSION_SECRET=your-secret  # Required: random secret for sessions
+PUBLIC_URL=http://localhost:3000  # Where the app is publicly accessible
 ```
+
+**Log Level Management:**
+- Log level is now managed in the web UI (Settings > System)
+- Default: `INFO` level (changed at runtime without restart)
+- Options: DEBUG, INFO, WARNING, ERROR
+- No need to set via environment variables
 
 **Using docker-compose with custom port:**
 ```bash
