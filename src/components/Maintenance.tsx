@@ -61,6 +61,8 @@ function Maintenance() {
   const [editingTask, setEditingTask] = useState<MaintenanceTask | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [completeConfirm, setCompleteConfirm] = useState<number | null>(null);
+  const [viewHistory, setViewHistory] = useState<number | null>(null);
+  const [taskHistory, setTaskHistory] = useState<any[]>([]);
   const [filter, setFilter] = useState<'all' | 'overdue' | 'due-soon' | 'up-to-date'>('all');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
@@ -109,6 +111,20 @@ function Maintenance() {
       }
     } catch (error) {
       console.error('Failed to load printers:', error);
+    }
+  };
+
+  const loadHistory = async (taskId: number) => {
+    try {
+      const response = await fetch(`/api/maintenance/${taskId}/history`);
+      const data = await response.json();
+      if (response.ok) {
+        setTaskHistory(data);
+        setViewHistory(taskId);
+      }
+    } catch (error) {
+      console.error('Failed to load history:', error);
+      setToast({ message: 'Failed to load history', type: 'error' });
     }
   };
 
@@ -363,6 +379,9 @@ function Maintenance() {
                   <button className="btn btn-success btn-sm" onClick={() => setCompleteConfirm(task.id)} title="Mark as completed">
                     ✓ Done
                   </button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => loadHistory(task.id)} title="View completion history">
+                    📜
+                  </button>
                   <button className="btn btn-secondary btn-sm" onClick={() => handleEdit(task)} title="Edit task">
                     ✎
                   </button>
@@ -499,6 +518,51 @@ function Maintenance() {
         onConfirm={() => completeConfirm && handleComplete(completeConfirm)}
         onCancel={() => setCompleteConfirm(null)}
       />
+
+      {/* History Modal */}
+      {viewHistory !== null && (
+        <div className="modal-overlay" onClick={() => setViewHistory(null)}>
+          <div className="modal maintenance-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>📜 Completion History</h2>
+              <button className="modal-close" onClick={() => setViewHistory(null)}>×</button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+              {taskHistory.length === 0 ? (
+                <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.6)', padding: '2rem' }}>
+                  No completion history yet
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {taskHistory.map((entry) => (
+                    <div key={entry.id} style={{
+                      background: 'rgba(255,255,255,0.05)',
+                      borderRadius: '8px',
+                      padding: '1rem',
+                      border: '1px solid rgba(255,255,255,0.1)'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                        <span style={{ fontWeight: 600, color: '#4caf50' }}>✓ Completed</span>
+                        <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem' }}>
+                          {new Date(entry.completed_at).toLocaleString()}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.8)' }}>
+                        <div>Print hours: {entry.print_hours_at_completion?.toFixed(1) || 'N/A'}</div>
+                        {entry.notes && (
+                          <div style={{ marginTop: '0.5rem', fontStyle: 'italic' }}>
+                            Notes: {entry.notes}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <Toast

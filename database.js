@@ -194,6 +194,20 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_maintenance_printer ON maintenance_tasks(printer_id);
   CREATE INDEX IF NOT EXISTS idx_maintenance_next_due ON maintenance_tasks(next_due);
   CREATE INDEX IF NOT EXISTS idx_maintenance_type ON maintenance_tasks(task_type);
+
+  CREATE TABLE IF NOT EXISTS maintenance_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL,
+    task_name TEXT NOT NULL,
+    printer_id TEXT,
+    completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    print_hours_at_completion REAL,
+    notes TEXT,
+    FOREIGN KEY (task_id) REFERENCES maintenance_tasks(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_maintenance_history_task ON maintenance_history(task_id);
+  CREATE INDEX IF NOT EXISTS idx_maintenance_history_date ON maintenance_history(completed_at);
 `);
 
 // Migration: Move settings to global config table

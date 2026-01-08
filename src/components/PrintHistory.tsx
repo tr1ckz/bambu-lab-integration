@@ -32,6 +32,7 @@ const PrintHistory: React.FC = () => {
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [printerFilter, setPrinterFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [syncing, setSyncing] = useState(false);
   const [syncingPrinter, setSyncingPrinter] = useState(false);
@@ -281,6 +282,11 @@ const PrintHistory: React.FC = () => {
   useEffect(() => {
     let filtered = [...allPrints];
 
+    // Apply printer filter
+    if (printerFilter !== 'all') {
+      filtered = filtered.filter(p => p.deviceId === printerFilter);
+    }
+
     // Apply status filter
     if (statusFilter !== 'all') {
       filtered = filtered.filter(p => {
@@ -304,7 +310,7 @@ const PrintHistory: React.FC = () => {
 
     setPrints(filtered);
     setCurrentPage(1); // Reset to page 1 when filters change
-  }, [searchTerm, statusFilter, allPrints]);
+  }, [searchTerm, statusFilter, printerFilter, allPrints]);
 
   // Pagination calculations
   const totalPages = Math.ceil(prints.length / ITEMS_PER_PAGE);
@@ -384,6 +390,28 @@ const PrintHistory: React.FC = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
           className="search-input"
         />
+        {(() => {
+          // Get unique printers from all prints
+          const uniquePrinters = Array.from(new Set(allPrints.map(p => p.deviceId).filter(Boolean)));
+          
+          // Only show printer filter if multiple printers exist
+          if (uniquePrinters.length > 1) {
+            return (
+              <select value={printerFilter} onChange={(e) => setPrinterFilter(e.target.value)} className="status-filter">
+                <option value="all">All Printers</option>
+                {uniquePrinters.map(deviceId => {
+                  const print = allPrints.find(p => p.deviceId === deviceId);
+                  return (
+                    <option key={deviceId} value={deviceId}>
+                      {print?.deviceName || deviceId}
+                    </option>
+                  );
+                })}
+              </select>
+            );
+          }
+          return null;
+        })()}
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="status-filter">
           <option value="all">All Status</option>
           <option value="success">Success</option>

@@ -1340,8 +1340,8 @@ app.get('/api/printers', async (req, res) => {
           deviceData.camera_rtsp_url = cameraUrl;
         }
         
-        // Try to get current job from MQTT client if printer is running
-        if (device.print_status === 'RUNNING' && printerIp && accessCode) {
+        // Try to get current job from MQTT client - always connect if credentials available
+        if (printerIp && accessCode) {
           const clientKey = device.dev_id;
           
           // Create or get existing MQTT client for this printer
@@ -1428,6 +1428,11 @@ app.get('/api/printers', async (req, res) => {
                 layer_num: jobData.layer_num,
                 total_layers: jobData.total_layers
               };
+              
+              // Include AMS information if available
+              if (jobData.ams) {
+                deviceData.current_task.ams = jobData.ams;
+              }
               
               // Check if there's a 3MF file for this print
               if (jobData.name) {
@@ -4047,6 +4052,7 @@ app.post('/api/maintenance/:id/complete', async (req, res) => {
   
   try {
     const { id } = req.params;
+    const { notes } = req.body; // Optional notes from user
     const task = db.prepare('SELECT * FROM maintenance_tasks WHERE id = ?').get(id);
     
     if (!task) {
@@ -4089,6 +4095,12 @@ app.post('/api/maintenance/:id/complete', async (req, res) => {
       WHERE id = ?
     `).run(now.toISOString(), nextDue.toISOString(), nextDueHours, id);
     
+    // Log completion to history
+    db.prepare(`
+      INSERT INTO maintenance_history (task_id, task_name, printer_id, completed_at, print_hours_at_completion, notes)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, task.task_name, task.printer_id, now.toISOString(), totalPrintHours, notes || null);
+    
     const updatedTask = db.prepare('SELECT * FROM maintenance_tasks WHERE id = ?').get(id);
     console.log(`[Maintenance Complete] Task updated successfully. hours_until_due=${updatedTask.hours_until_due}`);
     
@@ -4114,6 +4126,27 @@ app.post('/api/maintenance/:id/complete', async (req, res) => {
   } catch (error) {
     console.error('Complete maintenance task error:', error);
     res.status(500).json({ error: 'Failed to complete maintenance task' });
+  }
+});
+
+// Get maintenance history for a task
+app.get('/api/maintenance/:id/history', async (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  
+  try {
+    const { id } = req.params;
+    const history = db.prepare(`
+      SELECT * FROM maintenance_history 
+      WHERE task_id = ? 
+      ORDER BY completed_at DESC
+    `).all(id);
+    
+    res.json(history);
+  } catch (error) {
+    console.error('Get maintenance history error:', error);
+    res.status(500).json({ error: 'Failed to get maintenance history' });
   }
 });
 
