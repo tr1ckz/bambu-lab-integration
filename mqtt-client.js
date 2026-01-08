@@ -125,7 +125,13 @@ class BambuMqttClient extends EventEmitter {
         layer_num: printData.layer_num !== undefined ? printData.layer_num : (this.currentJobData.layer_num || 0),
         total_layers: printData.total_layer_num || this.currentJobData.total_layers || 0,
         gcode_state: printData.gcode_state || this.currentJobData.gcode_state || 'IDLE',
-        print_error: printData.print_error !== undefined ? printData.print_error : (this.currentJobData.print_error || 0)
+        print_error: printData.print_error !== undefined ? printData.print_error : (this.currentJobData.print_error || 0),
+        // Extra telemetry when available
+        nozzle_temp: (printData.nozzle_temper ?? printData.nozzle_temp ?? this.currentJobData.nozzle_temp ?? undefined),
+        bed_temp: (printData.bed_temper ?? printData.bed_temp ?? this.currentJobData.bed_temp ?? undefined),
+        chamber_temp: (printData.chamber_temper ?? printData.chamber_temp ?? this.currentJobData.chamber_temp ?? undefined),
+        speed_profile: (printData.speed_profile ?? printData.work_speed ?? printData.mc_print_speed ?? this.currentJobData.speed_profile ?? undefined),
+        fan_speed: (printData.fan_speed ?? printData.cooling_fan_speed ?? this.currentJobData.fan_speed ?? undefined)
       };
       
       // Extract integrated camera RTSP URL from P1S

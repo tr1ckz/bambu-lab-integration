@@ -55,6 +55,16 @@ function Printers() {
     }
   }, []);
 
+  const normalizeProgress = (value: number | undefined | null) => {
+    if (value === null || value === undefined || isNaN(value as any)) return 0;
+    let v = Number(value);
+    // Some firmwares report 0-1; convert to percentage
+    if (v <= 1) v = v * 100;
+    // Clamp and round
+    v = Math.max(0, Math.min(100, v));
+    return Math.round(v);
+  };
+
   if (loading) {
     return <LoadingScreen message="Loading printers..." />;
   }
@@ -162,10 +172,10 @@ function Printers() {
                     {typeof printer.current_task.progress === 'number' && (
                       <div className="job-progress">
                         <div className="progress-bar">
-                          <div className="progress-fill" style={{ width: `${printer.current_task.progress}%` }}></div>
+                          <div className="progress-fill" style={{ width: `${normalizeProgress(printer.current_task.progress)}%` }}></div>
                         </div>
                         <div className="progress-info">
-                          <span className="progress-percent">{printer.current_task.progress}%</span>
+                          <span className="progress-percent">{normalizeProgress(printer.current_task.progress)}%</span>
                           {printer.current_task.remaining_time !== undefined && printer.current_task.remaining_time > 0 && (
                             <span className="progress-time">
                               {printer.current_task.remaining_time >= 60 
@@ -178,6 +188,13 @@ function Printers() {
                             <span className="progress-eta">ETA: {new Date(printer.current_task.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           )}
                         </div>
+                        {(printer.current_task.nozzle_temp !== undefined || printer.current_task.bed_temp !== undefined || printer.current_task.speed_profile) && (
+                          <div className="progress-extra" style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', color: 'rgba(255,255,255,0.75)' }}>
+                            {typeof printer.current_task.nozzle_temp === 'number' && <span>Hotend: {Math.round(printer.current_task.nozzle_temp)}°C</span>}
+                            {typeof printer.current_task.bed_temp === 'number' && <span>Bed: {Math.round(printer.current_task.bed_temp)}°C</span>}
+                            {printer.current_task.speed_profile && <span>Mode: {String(printer.current_task.speed_profile)}</span>}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
