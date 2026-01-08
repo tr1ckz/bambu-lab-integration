@@ -6,24 +6,36 @@ interface LoadingSplashProps {
   progress?: number;
   onComplete?: () => void;
   checkServerHealth?: boolean;
+  backgroundImage?: string;
 }
 
 function LoadingSplash({ 
   message = 'Loading...', 
   progress, 
   onComplete,
-  checkServerHealth = false 
+  checkServerHealth = false,
+  backgroundImage
 }: LoadingSplashProps) {
-  const [dots, setDots] = useState('');
   const [serverReady, setServerReady] = useState(false);
+  const [countdown, setCountdown] = useState(30);
+  const [showRefresh, setShowRefresh] = useState(false);
 
+  // Countdown timer
   useEffect(() => {
-    const interval = setInterval(() => {
-      setDots(prev => (prev.length >= 3 ? '' : prev + '.'));
-    }, 500);
+    if (serverReady || !checkServerHealth) return;
+    
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          setShowRefresh(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
 
-    return () => clearInterval(interval);
-  }, []);
+    return () => clearInterval(timer);
+  }, [serverReady, checkServerHealth]);
 
   useEffect(() => {
     if (!checkServerHealth) return;
@@ -51,7 +63,7 @@ function LoadingSplash({
   }, [checkServerHealth, onComplete]);
 
   return (
-    <div className="loading-splash">
+    <div className="loading-splash" style={{ backgroundImage: backgroundImage ? `url(${backgroundImage})` : undefined }}>
       <div className="loading-content">
         <div className="loading-logo">
           <div className="loading-spinner"></div>
@@ -59,8 +71,24 @@ function LoadingSplash({
         </div>
         
         <div className="loading-message">
-          {message}{dots}
+          {message}
         </div>
+
+        {checkServerHealth && !serverReady && (
+          <div className="loading-countdown">
+            {countdown}s
+          </div>
+        )}
+
+        {showRefresh && (
+          <button 
+            className="btn btn-primary" 
+            onClick={() => window.location.reload()}
+            style={{ marginTop: '1.5rem' }}
+          >
+            Refresh
+          </button>
+        )}
 
         {progress !== undefined && (
           <div className="loading-progress-container">

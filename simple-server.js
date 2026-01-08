@@ -236,6 +236,14 @@ app.post('/api/log-level', (req, res) => {
 app.post('/api/system/restart', (req, res) => {
   if (!(req.session && req.session.authenticated)) return res.status(401).json({ error: 'Not authenticated' });
   try {
+    // Clean up tasks without printer_id before restart
+    try {
+      const deleted = db.prepare('DELETE FROM maintenance_tasks WHERE printer_id IS NULL OR printer_id = ""').run();
+      logger.info(`Cleaned up ${deleted.changes} maintenance tasks without printer assignment`);
+    } catch (e) {
+      logger.warn('Failed to cleanup maintenance tasks:', e.message);
+    }
+    
     fs.writeFileSync('/tmp/restart.flag', '1');
     logger.info('Restart flag created, watchdog will restart app');
     res.json({ ok: true });

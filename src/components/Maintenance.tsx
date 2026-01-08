@@ -76,6 +76,14 @@ function Maintenance() {
     interval_hours: 100
   });
 
+  // Load remembered printer from localStorage on mount
+  useEffect(() => {
+    const remembered = localStorage.getItem('maintenance_last_printer');
+    if (remembered) {
+      setFormData(prev => ({ ...prev, printer_id: remembered }));
+    }
+  }, []);
+
   useEffect(() => {
     loadTasks();
     loadPrinters();
@@ -162,6 +170,10 @@ function Maintenance() {
         setToast({ message: editingTask ? 'Task updated!' : 'Task created!', type: 'success' });
         setShowAddModal(false);
         setEditingTask(null);
+        // Remember this printer for next task
+        if (formData.printer_id) {
+          localStorage.setItem('maintenance_last_printer', formData.printer_id);
+        }
         resetForm();
         loadTasks();
       } else {

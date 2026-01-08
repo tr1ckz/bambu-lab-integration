@@ -2703,6 +2703,7 @@ function Settings({ userRole }: SettingsProps) {
           message={restartMessage}
           checkServerHealth={true}
           onComplete={() => window.location.reload()}
+          backgroundImage="/public/images/splash.png"
         />
       )}
 
