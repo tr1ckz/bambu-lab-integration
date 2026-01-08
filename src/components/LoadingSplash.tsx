@@ -81,6 +81,12 @@ function LoadingSplash({
           </div>
         )}
       </div>
+
+      <div className="loading-dots">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
     </div>
   );
 }
