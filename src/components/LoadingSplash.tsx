@@ -6,37 +6,17 @@ interface LoadingSplashProps {
   progress?: number;
   onComplete?: () => void;
   checkServerHealth?: boolean;
-  backgroundImage?: string;
 }
 
 function LoadingSplash({ 
-  message = 'Loading...', 
+  message, 
   progress, 
   onComplete,
-  checkServerHealth = false,
-  backgroundImage
+  checkServerHealth = false
 }: LoadingSplashProps) {
   const [serverReady, setServerReady] = useState(false);
-  const [countdown, setCountdown] = useState(30);
-  const [showRefresh, setShowRefresh] = useState(false);
 
-  // Countdown timer
-  useEffect(() => {
-    if (serverReady || !checkServerHealth) return;
-    
-    const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          setShowRefresh(true);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [serverReady, checkServerHealth]);
-
+  // Auto-refresh when server comes back up
   useEffect(() => {
     if (!checkServerHealth) return;
 
@@ -48,8 +28,9 @@ function LoadingSplash({
         });
         if (response.ok) {
           setServerReady(true);
+          // Auto-refresh after brief delay
           setTimeout(() => {
-            if (onComplete) onComplete();
+            window.location.reload();
           }, 500);
         }
       } catch (error) {
@@ -58,63 +39,28 @@ function LoadingSplash({
       }
     };
 
-    // Start checking after a brief delay
-    setTimeout(checkServer, 2000);
-  }, [checkServerHealth, onComplete]);
+    // Start checking immediately
+    checkServer();
+  }, [checkServerHealth]);
 
   return (
-    <div className="loading-splash" style={{ backgroundImage: backgroundImage ? `url(${backgroundImage})` : undefined }}>
+    <div className="loading-splash" style={{ backgroundImage: `url(/images/splash.png)` }}>
       <div className="loading-content">
-        <div className="loading-logo">
-          <div className="loading-spinner"></div>
-          <h1>PrintHive</h1>
-        </div>
-        
-        <div className="loading-message">
-          {message}
-        </div>
+        <h1>PrintHive</h1>
+      </div>
 
-        {checkServerHealth && !serverReady && (
-          <div className="loading-countdown">
-            {countdown}s
-          </div>
-        )}
-
-        {showRefresh && (
-          <button 
-            className="btn btn-primary" 
-            onClick={() => window.location.reload()}
-            style={{ marginTop: '1.5rem' }}
-          >
-            Refresh
-          </button>
-        )}
-
-        {progress !== undefined && (
-          <div className="loading-progress-container">
-            <div className="loading-progress-bar">
-              <div 
-                className="loading-progress-fill"
-                style={{ width: `${progress}%` }}
-              >
-                <span className="loading-progress-text">{progress}%</span>
-              </div>
+      {progress !== undefined && (
+        <div className="loading-progress-container">
+          <div className="loading-progress-bar">
+            <div 
+              className="loading-progress-fill"
+              style={{ width: `${progress}%` }}
+            >
+              <span className="loading-progress-text">{progress}%</span>
             </div>
           </div>
-        )}
-
-        {serverReady && (
-          <div className="loading-success">
-            ✓ Server ready! Redirecting...
-          </div>
-        )}
-      </div>
-
-      <div className="loading-dots">
-        <span></span>
-        <span></span>
-        <span></span>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
