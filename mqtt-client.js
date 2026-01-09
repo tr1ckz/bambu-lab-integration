@@ -198,7 +198,8 @@ class BambuMqttClient extends EventEmitter {
         if (this.lastGcodeState === 'RUNNING' && newGcodeState === 'FINISH') {
           this.emit('print_completed', {
             printerName: this.printerName,
-            modelName: newJobData.name || newJobData.subtask_name || 'Unknown',
+            jobName: newJobData.name || newJobData.subtask_name || 'Unknown',
+            modelName: undefined,
             progress: 100
           });
         }
@@ -207,7 +208,8 @@ class BambuMqttClient extends EventEmitter {
           if (newPrintError > 0 || newGcodeState === 'FAILED') {
             this.emit('print_failed', {
               printerName: this.printerName,
-              modelName: newJobData.name || newJobData.subtask_name || 'Unknown',
+              jobName: newJobData.name || newJobData.subtask_name || 'Unknown',
+              modelName: undefined,
               errorCode: newPrintError,
               progress: newJobData.progress || 0
             });
@@ -217,7 +219,8 @@ class BambuMqttClient extends EventEmitter {
         else if (this.lastGcodeState === 'RUNNING' && newGcodeState === 'PAUSE') {
           this.emit('print_paused', {
             printerName: this.printerName,
-            modelName: newJobData.name || newJobData.subtask_name || 'Unknown',
+            jobName: newJobData.name || newJobData.subtask_name || 'Unknown',
+            modelName: undefined,
             progress: newJobData.progress || 0
           });
         }
@@ -227,7 +230,8 @@ class BambuMqttClient extends EventEmitter {
       if (newPrintError > 0 && this.lastPrintError !== newPrintError) {
         this.emit('print_error', {
           printerName: this.printerName,
-          modelName: newJobData.name || newJobData.subtask_name || 'Unknown',
+          jobName: newJobData.name || newJobData.subtask_name || 'Unknown',
+          modelName: undefined,
           errorCode: newPrintError,
           progress: newJobData.progress || 0
         });

@@ -1645,48 +1645,88 @@ app.get('/api/printers', async (req, res) => {
               
               // Handle print state changes for Discord notifications
               mqttClient.on('print_completed', async (data) => {
-                logger.info(`Print completed on ${data.printerName}: ${data.modelName}`);
+                // Look up actual design title from database
+                const print = db.prepare(`
+                  SELECT designTitle, title FROM prints 
+                  WHERE (title = ? OR gcode_file LIKE ?)
+                  ORDER BY startTime DESC LIMIT 1
+                `).get(data.jobName, `%${data.jobName}%`);
+                
+                const designName = print?.designTitle || print?.title || data.jobName;
+                
+                logger.info(`Print completed on ${data.printerName}: ${data.jobName} (${designName})`);
                 await sendNotification('printer', {
                   status: 'completed',
                   printerName: data.printerName,
-                  modelName: data.modelName,
+                  jobName: data.jobName,
+                  modelName: designName,
                   progress: data.progress,
-                  message: `Print job "${data.modelName}" has completed successfully!`
+                  message: `Print job "${data.jobName}" has completed successfully!`
                 });
               });
               
               mqttClient.on('print_failed', async (data) => {
-                logger.warn(`Print FAILED on ${data.printerName}: ${data.modelName}`);
+                // Look up actual design title from database
+                const print = db.prepare(`
+                  SELECT designTitle, title FROM prints 
+                  WHERE (title = ? OR gcode_file LIKE ?)
+                  ORDER BY startTime DESC LIMIT 1
+                `).get(data.jobName, `%${data.jobName}%`);
+                
+                const designName = print?.designTitle || print?.title || data.jobName;
+                
+                logger.warn(`Print FAILED on ${data.printerName}: ${data.jobName} (${designName})`);
                 await sendNotification('printer', {
                   status: 'failed',
                   printerName: data.printerName,
-                  modelName: data.modelName,
+                  jobName: data.jobName,
+                  modelName: designName,
                   errorCode: data.errorCode ? `0x${data.errorCode.toString(16).toUpperCase()}` : undefined,
                   progress: data.progress,
-                  message: `Print job "${data.modelName}" has FAILED at ${data.progress}%!`
+                  message: `Print job "${data.jobName}" has FAILED at ${data.progress}%!`
                 });
               });
               
               mqttClient.on('print_error', async (data) => {
-                logger.warn(`Print ERROR on ${data.printerName}: ${data.modelName}`);
+                // Look up actual design title from database
+                const print = db.prepare(`
+                  SELECT designTitle, title FROM prints 
+                  WHERE (title = ? OR gcode_file LIKE ?)
+                  ORDER BY startTime DESC LIMIT 1
+                `).get(data.jobName, `%${data.jobName}%`);
+                
+                const designName = print?.designTitle || print?.title || data.jobName;
+                
+                logger.warn(`Print ERROR on ${data.printerName}: ${data.jobName} (${designName})`);
                 await sendNotification('printer', {
                   status: 'error',
                   printerName: data.printerName,
-                  modelName: data.modelName,
+                  jobName: data.jobName,
+                  modelName: designName,
                   errorCode: data.errorCode ? `0x${data.errorCode.toString(16).toUpperCase()}` : undefined,
                   progress: data.progress,
-                  message: `Printer error detected during "${data.modelName}" at ${data.progress}%`
+                  message: `Printer error detected during "${data.jobName}" at ${data.progress}%`
                 });
               });
               
               mqttClient.on('print_paused', async (data) => {
-                logger.info(`Print paused on ${data.printerName}: ${data.modelName}`);
+                // Look up actual design title from database
+                const print = db.prepare(`
+                  SELECT designTitle, title FROM prints 
+                  WHERE (title = ? OR gcode_file LIKE ?)
+                  ORDER BY startTime DESC LIMIT 1
+                `).get(data.jobName, `%${data.jobName}%`);
+                
+                const designName = print?.designTitle || print?.title || data.jobName;
+                
+                logger.info(`Print paused on ${data.printerName}: ${data.jobName} (${designName})`);
                 await sendNotification('printer', {
                   status: 'paused',
                   printerName: data.printerName,
-                  modelName: data.modelName,
+                  jobName: data.jobName,
+                  modelName: designName,
                   progress: data.progress,
-                  message: `Print job "${data.modelName}" has been paused at ${data.progress}%`
+                  message: `Print job "${data.jobName}" has been paused at ${data.progress}%`
                 });
               });
               
