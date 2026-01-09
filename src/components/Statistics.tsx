@@ -40,6 +40,59 @@ const Statistics: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const handleExportMaterialsCSV = () => {
+    if (!stats) return;
+
+    const data = Object.entries(stats.materialsByColor)
+      .filter(([color, data]) => color && data && data.weight)
+      .map(([color, data]) => {
+        const { css, name } = formatColor(color);
+        return {
+          colorName: name,
+          colorHex: css,
+          materialType: data.type || 'Unknown',
+          prints: data.count,
+          weightGrams: Number(data.weight.toFixed(2)),
+          lengthMm: Number(data.length.toFixed(2))
+        };
+      });
+
+    exportToCSV(
+      data,
+      [
+        { header: 'Color', accessor: 'colorName' },
+        { header: 'Hex', accessor: 'colorHex' },
+        { header: 'Material', accessor: 'materialType' },
+        { header: 'Prints', accessor: 'prints' },
+        { header: 'Weight (g)', accessor: 'weightGrams' },
+        { header: 'Length (mm)', accessor: 'lengthMm' },
+      ],
+      'materials_by_color'
+    );
+  };
+
+  const handleExportPrintersCSV = () => {
+    if (!stats) return;
+
+    const data = Object.entries(stats.printsByPrinter)
+      .map(([printer, count]) => ({
+        printer,
+        prints: count,
+        percentOfTotal: stats.totalPrints ? Number(((count / stats.totalPrints) * 100).toFixed(2)) : 0
+      }))
+      .sort((a, b) => b.prints - a.prints);
+
+    exportToCSV(
+      data,
+      [
+        { header: 'Printer', accessor: 'printer' },
+        { header: 'Prints', accessor: 'prints' },
+        { header: 'Percent of Total', accessor: 'percentOfTotal' },
+      ],
+      'prints_by_printer'
+    );
+  };
+
   const fetchStatistics = async () => {
     try {
       setLoading(true);
