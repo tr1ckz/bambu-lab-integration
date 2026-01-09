@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './PrintHistory.css';
 import Toast from './Toast';
 import LoadingScreen from './LoadingScreen';
+import Spinner from './Spinner';
 import { useDebounce } from '../hooks/useDebounce';
 import { useEscapeKey } from '../hooks/useKeyboardShortcut';
 import { API_ENDPOINTS } from '../config/api';
