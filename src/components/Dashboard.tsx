@@ -20,6 +20,35 @@ interface DashboardProps {
 
 type Tab = 'home' | 'history' | 'library' | 'duplicates' | 'maintenance' | 'settings' | 'printers' | 'statistics';
 
+const tabPaths: Record<Tab, string> = {
+  home: '/',
+  history: '/history',
+  library: '/library',
+  duplicates: '/duplicates',
+  maintenance: '/maintenance',
+  settings: '/settings',
+  printers: '/printers',
+  statistics: '/statistics'
+};
+
+const getHashSection = () => {
+  return window.location.hash ? window.location.hash.slice(1) : null;
+};
+
+const getTabFromLocation = (): Tab | null => {
+  const path = window.location.pathname.toLowerCase();
+
+  if (path.startsWith('/history')) return 'history';
+  if (path.startsWith('/library')) return 'library';
+  if (path.startsWith('/duplicates')) return 'duplicates';
+  if (path.startsWith('/maintenance')) return 'maintenance';
+  if (path.startsWith('/settings')) return 'settings';
+  if (path.startsWith('/printers')) return 'printers';
+  if (path.startsWith('/statistics')) return 'statistics';
+  if (path === '/' || path === '') return 'home';
+  return null;
+};
+
 interface UserInfo {
   username: string;
   role: string;
@@ -29,9 +58,12 @@ interface UserInfo {
 
 function Dashboard({ onLogout }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const urlTab = getTabFromLocation();
+    if (urlTab) return urlTab;
     const savedTab = localStorage.getItem('activeTab');
     return (savedTab as Tab) || 'home';
   });
+  const [settingsSection, setSettingsSection] = useState<string | null>(() => getHashSection());
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [hideBmc, setHideBmc] = useState(true); // Default hidden until loaded
@@ -71,10 +103,33 @@ function Dashboard({ onLogout }: DashboardProps) {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [mobileMenuOpen]);
 
-  // Close mobile menu on tab change
-  const handleTabChange = (tab: Tab) => {
+  // Sync tab with browser history (supports back/forward navigation)
+  useEffect(() => {
+    const handleNavigation = () => {
+      const tabFromPath = getTabFromLocation();
+      if (tabFromPath) {
+        setActiveTab(tabFromPath);
+        setSettingsSection(getHashSection());
+      }
+    };
+
+    window.addEventListener('popstate', handleNavigation);
+    window.addEventListener('hashchange', handleNavigation);
+    return () => {
+      window.removeEventListener('popstate', handleNavigation);
+      window.removeEventListener('hashchange', handleNavigation);
+    };
+  }, []);
+
+  // Close mobile menu on tab change + push URL
+  const handleTabChange = (tab: Tab, hashSection?: string) => {
     setActiveTab(tab);
     setMobileMenuOpen(false);
+
+    const path = tabPaths[tab] || '/';
+    const nextUrl = hashSection ? `${path}#${hashSection}` : path;
+    window.history.pushState({ tab }, '', nextUrl);
+    setSettingsSection(hashSection || getHashSection());
   };
 
   const isAdmin = userInfo?.role === 'admin' || userInfo?.role === 'superadmin';
@@ -121,7 +176,7 @@ function Dashboard({ onLogout }: DashboardProps) {
       <nav className="navbar">
         <div className="navbar-container">
           {/* Logo */}
-          <div className="navbar-brand" onClick={() => setActiveTab('home')} style={{ cursor: 'pointer' }}>
+          <div className="navbar-brand" onClick={() => handleTabChange('home')} style={{ cursor: 'pointer' }}>
             <img src="/images/logo.png" alt="PrintHive" className="navbar-logo" />
             <span className="navbar-title">PrintHive</span>
           </div>
@@ -220,7 +275,7 @@ function Dashboard({ onLogout }: DashboardProps) {
           {activeTab === 'library' ? <Library userRole={userInfo?.role} /> : null}
           {activeTab === 'duplicates' ? <Duplicates /> : null}
           {activeTab === 'maintenance' ? <Maintenance /> : null}
-          {activeTab === 'settings' ? <Settings userRole={userInfo?.role} /> : null}
+          {activeTab === 'settings' ? <Settings userRole={userInfo?.role} initialSection={settingsSection || undefined} /> : null}
           {activeTab === 'printers' ? <Printers /> : null}
           {activeTab === 'statistics' ? <Statistics /> : null}
         </div>

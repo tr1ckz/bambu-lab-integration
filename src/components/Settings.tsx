@@ -16,6 +16,7 @@ interface BambuStatus {
 
 interface SettingsProps {
   userRole?: string;
+  initialSection?: string;
 }
 
 // Collapsible Section Component
@@ -45,7 +46,7 @@ function CollapsibleSection({ title, icon, children, defaultExpanded = false }: 
   );
 }
 
-function Settings({ userRole }: SettingsProps) {
+function Settings({ userRole, initialSection }: SettingsProps) {
   const isAdmin = userRole === 'admin' || userRole === 'superadmin';
   const [bambuStatus, setBambuStatus] = useState<BambuStatus | null>(null);
   const [email, setEmail] = useState('');
@@ -71,6 +72,32 @@ function Settings({ userRole }: SettingsProps) {
       [category]: !prev[category]
     }));
   };
+
+  // When navigated with a hash (e.g., /settings#account), expand and scroll to that section
+  useEffect(() => {
+    if (!initialSection) return;
+
+    const sectionMap: Record<string, string> = {
+      printer: 'settings-printer',
+      account: 'settings-account',
+      preferences: 'settings-preferences',
+      integrations: 'settings-integrations',
+      advanced: 'settings-advanced',
+      administration: 'settings-administration'
+    };
+
+    const targetId = sectionMap[initialSection] || `settings-${initialSection}`;
+
+    setExpandedCategories(prev => ({
+      ...prev,
+      [initialSection]: true
+    }));
+
+    const targetEl = document.getElementById(targetId);
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [initialSection]);
   
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -1344,6 +1371,7 @@ function Settings({ userRole }: SettingsProps) {
       {/* PRINTER CONNECTION */}
       <div className="settings-category">
         <div 
+          id="settings-printer"
           className={`category-header category-collapsible ${expandedCategories.printer ? 'expanded' : ''}`}
           onClick={() => toggleCategory('printer')}
         >
@@ -1540,6 +1568,7 @@ function Settings({ userRole }: SettingsProps) {
       {/* ACCOUNT */}
       <div className="settings-category">
         <div 
+          id="settings-account"
           className={`category-header category-collapsible ${expandedCategories.account ? 'expanded' : ''}`}
           onClick={() => toggleCategory('account')}
         >
@@ -1669,6 +1698,7 @@ function Settings({ userRole }: SettingsProps) {
       {/* PREFERENCES */}
       <div className="settings-category">
         <div 
+          id="settings-preferences"
           className={`category-header category-collapsible ${expandedCategories.preferences ? 'expanded' : ''}`}
           onClick={() => toggleCategory('preferences')}
         >
@@ -1836,6 +1866,7 @@ function Settings({ userRole }: SettingsProps) {
       {/* INTEGRATIONS */}
       <div className="settings-category">
         <div 
+          id="settings-integrations"
           className={`category-header category-collapsible ${expandedCategories.integrations ? 'expanded' : ''}`}
           onClick={() => toggleCategory('integrations')}
         >
@@ -1956,6 +1987,7 @@ function Settings({ userRole }: SettingsProps) {
       {/* ADVANCED */}
       <div className="settings-category">
         <div 
+          id="settings-advanced"
           className={`category-header category-collapsible ${expandedCategories.advanced ? 'expanded' : ''}`}
           onClick={() => toggleCategory('advanced')}
         >
@@ -2701,6 +2733,7 @@ function Settings({ userRole }: SettingsProps) {
       {isAdmin && (
         <div className="settings-category">
           <div 
+            id="settings-administration"
             className={`category-header category-collapsible ${expandedCategories.administration ? 'expanded' : ''}`}
             onClick={() => toggleCategory('administration')}
           >
