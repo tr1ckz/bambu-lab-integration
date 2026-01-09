@@ -1799,6 +1799,17 @@ app.get('/api/printers', async (req, res) => {
       printersData.devices = devicesWithExtras;
     }
     
+    // Log AMS data in final response for debugging
+    printersData.devices?.forEach(device => {
+      if (device.ams) {
+        logger.info(`✓ Device ${device.dev_id} has AMS in API response: ${device.ams.trays?.length || 0} trays`);
+      } else if (device.current_task?.ams) {
+        logger.info(`✓ Device ${device.dev_id} has AMS in current_task: ${device.current_task.ams.trays?.length || 0} trays`);
+      } else {
+        logger.debug(`✗ Device ${device.dev_id} has NO AMS data in API response`);
+      }
+    });
+    
     res.json(printersData);
   } catch (error) {
     logger.error('Printers error:', error.response?.data || error.message);
