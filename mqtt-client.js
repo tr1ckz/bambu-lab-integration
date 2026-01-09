@@ -154,7 +154,9 @@ class BambuMqttClient extends EventEmitter {
       // AMS information, when provided
       const ams = data.ams || printData.ams;
       if (ams) {
+        logger.debug('AMS data detected:', JSON.stringify(ams, null, 2));
         const trays = Array.isArray(ams.tray) ? ams.tray : (Array.isArray(ams.trays) ? ams.trays : []);
+        logger.debug(`Found ${trays.length} AMS trays`);
         newJobData.ams = {
           active_tray: (ams.active_tray ?? ams.cur_tray ?? ams.cur_tray_index ?? null),
           trays: trays.map((t, idx) => ({
@@ -165,6 +167,10 @@ class BambuMqttClient extends EventEmitter {
             temp: (t.temp ?? t.temperature ?? null)
           }))
         };
+        logger.debug('Processed AMS data:', JSON.stringify(newJobData.ams, null, 2));
+      } else {
+        logger.debug('No AMS data in message. Keys in data:', Object.keys(data));
+        logger.debug('Keys in printData:', Object.keys(printData));
       }
 
       // Error message if available

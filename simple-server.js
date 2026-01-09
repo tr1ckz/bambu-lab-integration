@@ -1706,11 +1706,15 @@ app.get('/api/printers', async (req, res) => {
             // Always include AMS info at device level if available
             if (jobData && jobData.ams) {
               deviceData.ams = jobData.ams;
+              logger.debug(`AMS data available for ${device.dev_id}: ${jobData.ams.trays?.length} trays`);
+            } else if (jobData) {
+              logger.debug(`No AMS data in jobData for ${device.dev_id}. Available keys:`, Object.keys(jobData));
             }
             
             if (jobData && jobData.name) {
               // Pass all MQTT job data to current_task (includes temps, speeds, AMS, etc.)
               deviceData.current_task = { ...jobData };
+              logger.debug(`Current task for ${device.dev_id} includes AMS: ${!!deviceData.current_task.ams}`);
               
               // Check if there's a 3MF file for this print
               if (jobData.name) {
