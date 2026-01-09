@@ -152,21 +152,31 @@ class BambuMqttClient extends EventEmitter {
       }
 
       // AMS information, when provided
-      const ams = data.ams || printData.ams;
-      if (ams) {
-        logger.debug('AMS data detected:', JSON.stringify(ams, null, 2));
-        const trays = Array.isArray(ams.tray) ? ams.tray : (Array.isArray(ams.trays) ? ams.trays : []);
+      const amsRaw = data.ams || printData.ams;
+      if (amsRaw) {
+        // Some payloads nest AMS under ams[0].tray
+        let traysSource = [];
+        if (Array.isArray(amsRaw.tray)) traysSource = amsRaw.tray;
+        else if (Array.isArray(amsRaw.trays)) traysSource = amsRaw.trays;
+        else if (Array.isArray(amsRaw.ams) && amsRaw.ams.length > 0) traysSource = amsRaw.ams[0].tray || amsRaw.ams[0].trays || [];
+
+        const trays = Array.isArray(traysSource) ? traysSource : [];
+        const activeTray = (amsRaw.active_tray ?? amsRaw.cur_tray ?? amsRaw.cur_tray_index ?? (amsRaw.tray_now ? parseInt(amsRaw.tray_now, 10) : null));
+
+        logger.debug('AMS data detected:', JSON.stringify(amsRaw, null, 2));
         logger.debug(`Found ${trays.length} AMS trays`);
+
         newJobData.ams = {
-          active_tray: (ams.active_tray ?? ams.cur_tray ?? ams.cur_tray_index ?? null),
+          active_tray: activeTray,
           trays: trays.map((t, idx) => ({
             slot: (t.id ?? t.slot ?? idx),
-            color: (t.color ?? t.tray_color ?? null),
+            color: (t.color ?? t.tray_color ?? t.cols?.[0] ?? null),
             type: (t.type ?? t.tray_type ?? null),
-            humidity: (t.humidity ?? t.humi ?? null),
-            temp: (t.temp ?? t.temperature ?? null)
+            humidity: (t.humidity ?? t.humi ?? amsRaw.humidity ?? null),
+            temp: (t.temp ?? t.temperature ?? amsRaw.temp ?? null)
           }))
         };
+
         logger.debug('Processed AMS data:', JSON.stringify(newJobData.ams, null, 2));
       } else {
         logger.debug('No AMS data in message. Keys in data:', Object.keys(data));
