@@ -289,13 +289,14 @@
 }
 
 .print-card {
-  background: rgba(30, 30, 30, 0.95);
+  background: var(--bg-dark);
   backdrop-filter: blur(20px);
   border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-lg);
   transition: all 0.3s ease;
   animation: scaleIn 0.5s ease-out;
+  cursor: pointer;
 }
 
 @keyframes scaleIn {

@@ -43,7 +43,9 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ onNavigate }) => {
   useEffect(() => {
     loadDashboardData();
     const interval = setInterval(loadDashboardData, 30000); // Refresh every 30s
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+    };
   }, []);
 
   const loadDashboardData = async () => {

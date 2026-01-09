@@ -65,6 +65,199 @@ const videoConverter = require('./video-converter');
 const BambuMqttClient = require('./mqtt-client');
 const coverImageFetcher = require('./cover-image-fetcher');
 
+// Periodic cloud sync to keep DB fresh without manual action
+function setupCloudAutoSync() {
+  const intervalMinutes = 60; // sync every 60 minutes
+  async function runCloudSyncOnce() {
+    try {
+      const rows = db.prepare(`
+        SELECT user_id, bambu_token, bambu_region 
+        FROM settings 
+        WHERE bambu_token IS NOT NULL AND bambu_token != ''
+      `).all();
+
+      if (!rows || rows.length === 0) {
+        logger.info('[CloudSync] No cloud tokens configured; skipping.');
+        return;
+      }
+
+      for (const row of rows) {
+        const apiBase = (row.bambu_region === 'china')
+          ? 'https://api.bambulab.cn'
+          : 'https://api.bambulab.com';
+
+        try {
+          logger.info(`[CloudSync] Fetching tasks for user ${row.user_id}...`);
+          const response = await axios.get(`${apiBase}/v1/user-service/my/tasks?limit=100`, {
+            headers: { Authorization: `Bearer ${row.bambu_token}` },
+            timeout: 20000
+          });
+
+          const hits = response.data?.hits || [];
+          if (hits.length > 0) {
+            const result = storePrints(hits);
+            logger.info(`[CloudSync] Stored ${result.total} prints (${result.newPrints} new, ${result.updated} updated)`);
+          } else {
+            logger.info('[CloudSync] No prints returned from API');
+          }
+        } catch (err) {
+          logger.warn(`[CloudSync] Error syncing for user ${row.user_id}: ${err.message}`);
+        }
+      }
+    } catch (err) {
+      logger.warn('[CloudSync] Unexpected error:', err.message);
+    }
+  }
+
+  // Run once on startup and then periodically
+  runCloudSyncOnce();
+  setInterval(runCloudSyncOnce, intervalMinutes * 60 * 1000);
+}
+
+// Auto-scan library every 5 minutes in background
+function setupAutoLibraryScan() {
+  const intervalMinutes = 5;
+  async function scanLibraryOnce() {
+    try {
+      logger.debug('[LibraryScan] Starting automatic scan...');
+      const allFiles = walkDirectory(libraryDir);
+      let added = 0;
+      
+      for (const filePath of allFiles) {
+        const ext = path.extname(filePath).toLowerCase();
+        if (ext === '.3mf' || ext === '.stl' || ext === '.gcode') {
+          const fileName = path.basename(filePath);
+          const relativePath = path.relative(__dirname, filePath);
+          
+          const existing = db.prepare('SELECT id FROM library WHERE filePath = ?').get(relativePath);
+          
+          if (!existing) {
+            const stats = fs.statSync(filePath);
+            const fileType = ext.substring(1);
+            
+            db.prepare(`
+              INSERT INTO library (fileName, originalName, fileType, fileSize, filePath, description, tags)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
+            `).run(fileName, fileName, fileType, stats.size, relativePath, '', '');
+            
+            added++;
+          }
+        }
+      }
+      
+      if (added > 0) {
+        logger.info(`[LibraryScan] Added ${added} new files to library`);
+      } else {
+        logger.debug('[LibraryScan] No new files found');
+      }
+    } catch (err) {
+      logger.warn('[LibraryScan] Error:', err.message);
+    }
+  }
+  
+  // Start scanning after 30s delay, then every 5 minutes
+  setTimeout(() => {
+    scanLibraryOnce();
+    setInterval(scanLibraryOnce, intervalMinutes * 60 * 1000);
+  }, 30000);
+}
+
+// Auto-match videos every 10 minutes in background
+function setupAutoVideoMatching() {
+  const intervalMinutes = 10;
+  async function matchVideosOnce() {
+    try {
+      logger.debug('[VideoMatch] Starting automatic matching...');
+      
+      const videoFiles = fs.existsSync(videosDir) 
+        ? fs.readdirSync(videosDir).filter(f => f.endsWith('.avi') || f.endsWith('.mp4'))
+        : [];
+      
+      const printsWithoutVideo = db.prepare(`
+        SELECT id, modelId, title, startTime, endTime
+        FROM prints
+        WHERE (videoLocal IS NULL OR videoLocal = '')
+          AND startTime IS NOT NULL
+        ORDER BY startTime DESC
+      `).all();
+      
+      if (printsWithoutVideo.length === 0 || videoFiles.length === 0) {
+        logger.debug('[VideoMatch] Nothing to match');
+        return;
+      }
+      
+      let matched = 0;
+      
+      for (const videoFile of videoFiles) {
+        // Check if already matched
+        const existing = db.prepare(`
+          SELECT id FROM prints WHERE videoLocal = ?
+        `).get(videoFile);
+        
+        if (existing) continue;
+        
+        // Extract timestamp from filename: video_2024-12-13_15-18-02.avi
+        const match = videoFile.match(/video_(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})/);
+        
+        if (match) {
+          const [, date, hours, minutes, seconds] = match;
+          const videoDate = new Date(`${date}T${hours}:${minutes}:${seconds}`);
+          const videoTimestampMs = videoDate.getTime();
+          
+          // Find the best matching print
+          let bestMatch = null;
+          let bestTimeDiff = Infinity;
+          
+          for (const print of printsWithoutVideo) {
+            let printDate;
+            const st = print.startTime;
+            
+            if (/^\d+$/.test(st)) {
+              const ts = parseInt(st);
+              printDate = new Date(ts > 9999999999 ? ts : ts * 1000);
+            } else if (st.includes('T') || st.includes(' ')) {
+              printDate = new Date(st);
+            } else {
+              continue;
+            }
+            
+            if (isNaN(printDate.getTime())) continue;
+            
+            const timeDiff = Math.abs(videoTimestampMs - printDate.getTime());
+            const hoursDiff = timeDiff / (1000 * 60 * 60);
+            
+            if (hoursDiff <= 4 && timeDiff < bestTimeDiff) {
+              bestTimeDiff = timeDiff;
+              bestMatch = print;
+            }
+          }
+          
+          if (bestMatch) {
+            db.prepare('UPDATE prints SET videoLocal = ? WHERE id = ?').run(videoFile, bestMatch.id);
+            const idx = printsWithoutVideo.findIndex(p => p.id === bestMatch.id);
+            if (idx > -1) printsWithoutVideo.splice(idx, 1);
+            matched++;
+          }
+        }
+      }
+      
+      if (matched > 0) {
+        logger.info(`[VideoMatch] Matched ${matched} videos to prints`);
+      } else {
+        logger.debug('[VideoMatch] No new matches found');
+      }
+    } catch (err) {
+      logger.warn('[VideoMatch] Error:', err.message);
+    }
+  }
+  
+  // Start matching after 60s delay, then every 10 minutes
+  setTimeout(() => {
+    matchVideosOnce();
+    setInterval(matchVideosOnce, intervalMinutes * 60 * 1000);
+  }, 60000);
+}
+
 const app = express();
 let httpServer = null; // Store reference for graceful shutdown
 const mqttClients = new Map(); // Store MQTT clients per printer
@@ -77,9 +270,27 @@ const storage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + '-' + file.originalname);
+    // Sanitize filename to prevent directory traversal
+    const safeName = path.basename(file.originalname).replace(/[^a-zA-Z0-9._-]/g, '_');
+    cb(null, uniqueSuffix + '-' + safeName);
   }
 });
+
+// Security: Validate and sanitize file paths
+function sanitizeFilePath(input) {
+  if (!input) return '';
+  
+  // Remove any directory traversal attempts
+  const normalized = path.normalize(input).replace(/^(\.\.(\/|\\|$))+/, '');
+  
+  // Ensure no path traversal
+  if (normalized.includes('..')) {
+    throw new Error('Invalid file path: directory traversal detected');
+  }
+  
+  return normalized;
+}
+
 const upload = multer({ 
   storage,
   fileFilter: (req, file, cb) => {
@@ -5918,10 +6129,12 @@ httpServer = app.listen(PORT, async () => {
   
   // Start background sync
   backgroundSync.start();
-  
-  // Initialize watchdog
-  setupWatchdog();
-  
+  // Start automatic cloud sync (uses tokens in settings)
+  setupCloudAutoSync();
+  // Start automatic library scanning (every 5 min)
+  setupAutoLibraryScan();
+  // Start automatic video matching (every 10 min)
+  setupAutoVideoMatching();
   // Initialize maintenance notification checker
   setupMaintenanceNotifications();
   

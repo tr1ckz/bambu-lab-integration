@@ -8,11 +8,15 @@ interface ToastProps {
   duration?: number;
 }
 
-function Toast({ message, type, onClose, duration = 5000 }: ToastProps) {
+function Toast({ message, type, onClose, duration }: ToastProps) {
   useEffect(() => {
-    const timer = setTimeout(onClose, duration);
+    // Auto-calculate duration if not provided: 50ms per character, min 3s, max 10s
+    const charCount = message.length;
+    const calcDuration = duration || Math.min(Math.max(charCount * 50, 3000), 10000);
+    
+    const timer = setTimeout(onClose, calcDuration);
     return () => clearTimeout(timer);
-  }, [duration, onClose]);
+  }, [message, duration, onClose]);
 
   return (
     <div className={`toast toast-${type}`}>

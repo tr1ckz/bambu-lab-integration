@@ -30,7 +30,11 @@ function Printers() {
     // Refresh camera feeds every 2 seconds - without causing re-renders
     const interval = setInterval(refreshCameras, 2000);
     
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      // Clear all image refs on unmount
+      imageRefs.current.clear();
+    };
   }, [printers, refreshCameras]);
 
   const fetchPrinters = async () => {

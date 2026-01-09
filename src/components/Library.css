@@ -13,9 +13,9 @@
 
 .upload-dropzone {
   position: relative;
-  border: 3px dashed rgba(255, 255, 255, 0.3);
+  border: 3px dashed var(--border-tertiary);
   border-radius: 16px;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--bg-modal);
   padding: 3rem 2rem;
   text-align: center;
   transition: all 0.3s ease;
@@ -23,14 +23,14 @@
 }
 
 .upload-dropzone:hover {
-  border-color: rgba(127, 0, 255, 0.5);
-  background: rgba(127, 0, 255, 0.1);
+  border-color: var(--border-hover);
+  background: var(--bg-hover);
   transform: translateY(-2px);
 }
 
 .upload-dropzone.dragging {
-  border-color: #7f00ff;
-  background: rgba(127, 0, 255, 0.2);
+  border-color: var(--border-focus);
+  background: var(--bg-hover-intense);
   box-shadow: 0 0 30px rgba(127, 0, 255, 0.3);
 }
 
@@ -51,13 +51,13 @@
 
 .dropzone-content h3 {
   margin: 0 0 0.5rem 0;
-  color: #fff;
+  color: var(--text-primary);
   font-size: 1.5rem;
 }
 
 .dropzone-content p {
   margin: 0.25rem 0;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-tertiary);
 }
 
 .dropzone-hint {
@@ -261,14 +261,15 @@
 }
 
 .file-card {
-  background: rgba(30, 30, 30, 0.95);
+  background: var(--bg-dark);
   backdrop-filter: blur(10px);
-  border: 1px solid #404040;
+  border: 1px solid var(--border-dark);
   border-radius: 12px;
   overflow: hidden;
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
+  cursor: pointer;
 }
 
 .file-card:hover {

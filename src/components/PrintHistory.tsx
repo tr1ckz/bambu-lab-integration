@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import './PrintHistory.css';
-import Toast from './Toast';import LoadingScreen from './LoadingScreen';
+import Toast from './Toast';
+import LoadingScreen from './LoadingScreen';
+import { useDebounce } from '../hooks/useDebounce';
 interface Print {
   id: number;
   modelId: string;
@@ -300,8 +302,8 @@ const PrintHistory: React.FC = () => {
     }
 
     // Apply search filter
-    if (searchTerm.trim()) {
-      const search = searchTerm.toLowerCase();
+    if (debouncedSearchTerm.trim()) {
+      const search = debouncedSearchTerm.toLowerCase();
       filtered = filtered.filter(p => 
         p.title?.toLowerCase().includes(search) ||
         p.designTitle?.toLowerCase().includes(search) ||
@@ -312,7 +314,7 @@ const PrintHistory: React.FC = () => {
 
     setPrints(filtered);
     setCurrentPage(1); // Reset to page 1 when filters change
-  }, [searchTerm, statusFilter, printerFilter, allPrints]);
+  }, [debouncedSearchTerm, statusFilter, printerFilter, allPrints]);
 
   // Pagination calculations
   const totalPages = Math.ceil(prints.length / ITEMS_PER_PAGE);

@@ -4,6 +4,7 @@ import ModelViewer from './ModelViewer';
 import TagsInput from './TagsInput';
 import Toast from './Toast';
 import LoadingScreen from './LoadingScreen';
+import { useDebounce } from '../hooks/useDebounce';
 
 interface LibraryFile {
   id: number;
@@ -93,10 +94,13 @@ const Library: React.FC<LibraryProps> = ({ userRole }) => {
     fetchFiles();
   }, []);
 
+  // Debounce search query for better performance
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
   // Filter files based on search query and filters
   const filteredFiles = files
     .filter(file => {
-      const query = searchQuery.toLowerCase();
+      const query = debouncedSearchQuery.toLowerCase();
       const matchesQuery = !query || 
         file.originalName.toLowerCase().includes(query) ||
         file.description.toLowerCase().includes(query) ||
@@ -1049,6 +1053,10 @@ const Library: React.FC<LibraryProps> = ({ userRole }) => {
           >
             ← Previous
           </button>
+          
+          <div className="pagination-info">
+            Page {currentPage} of {totalPages} ({filteredFiles.length} files)
+          </div>
           
           <div className="page-numbers">
             {Array.from({ length: totalPages }, (_, i) => i + 1)

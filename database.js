@@ -375,20 +375,59 @@ try {
 }
 
 // Prepare statements
-const insertPrint = db.prepare(`
-  INSERT OR REPLACE INTO prints (
-    id, designId, designTitle, instanceId, modelId, title, cover, videoUrl, status,
+// Upsert that preserves existing videoLocal on cloud resync
+const upsertPrint = db.prepare(`
+  INSERT INTO prints (
+    id, designId, designTitle, instanceId, modelId, title, cover, coverLocal, videoUrl, videoLocal, status,
     feedbackStatus, startTime, endTime, weight, length, costTime, profileId,
     plateIndex, plateName, deviceId, deviceModel, deviceName, bedType,
     jobType, mode, isPublicProfile, isPrintable, isDelete, amsDetailMapping,
-    material, platform, stepSummary, nozzleInfos, snapShot, updatedAt
+    material, platform, stepSummary, nozzleInfos, snapShot, createdAt, updatedAt
   ) VALUES (
-    @id, @designId, @designTitle, @instanceId, @modelId, @title, @cover, @videoUrl, @status,
+    @id, @designId, @designTitle, @instanceId, @modelId, @title, @cover, @coverLocal, @videoUrl, @videoLocal, @status,
     @feedbackStatus, @startTime, @endTime, @weight, @length, @costTime, @profileId,
     @plateIndex, @plateName, @deviceId, @deviceModel, @deviceName, @bedType,
     @jobType, @mode, @isPublicProfile, @isPrintable, @isDelete, @amsDetailMapping,
-    @material, @platform, @stepSummary, @nozzleInfos, @snapShot, CURRENT_TIMESTAMP
+    @material, @platform, @stepSummary, @nozzleInfos, @snapShot, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
   )
+  ON CONFLICT(modelId) DO UPDATE SET
+    id = excluded.id,
+    designId = excluded.designId,
+    designTitle = excluded.designTitle,
+    instanceId = excluded.instanceId,
+    title = excluded.title,
+    cover = excluded.cover,
+    videoUrl = excluded.videoUrl,
+    status = excluded.status,
+    feedbackStatus = excluded.feedbackStatus,
+    startTime = excluded.startTime,
+    endTime = excluded.endTime,
+    weight = excluded.weight,
+    length = excluded.length,
+    costTime = excluded.costTime,
+    profileId = excluded.profileId,
+    plateIndex = excluded.plateIndex,
+    plateName = excluded.plateName,
+    deviceId = excluded.deviceId,
+    deviceModel = excluded.deviceModel,
+    deviceName = excluded.deviceName,
+    bedType = excluded.bedType,
+    jobType = excluded.jobType,
+    mode = excluded.mode,
+    isPublicProfile = excluded.isPublicProfile,
+    isPrintable = excluded.isPrintable,
+    isDelete = excluded.isDelete,
+    amsDetailMapping = excluded.amsDetailMapping,
+    material = excluded.material,
+    platform = excluded.platform,
+    stepSummary = excluded.stepSummary,
+    nozzleInfos = excluded.nozzleInfos,
+    snapShot = excluded.snapShot,
+    updatedAt = CURRENT_TIMESTAMP,
+    -- NEVER overwrite existing videoLocal - preserve matches at all costs
+    videoLocal = COALESCE(prints.videoLocal, excluded.videoLocal),
+    -- NEVER overwrite existing coverLocal - preserve local covers
+    coverLocal = COALESCE(prints.coverLocal, excluded.coverLocal)
 `);
 
 const insertFile = db.prepare(`
@@ -430,6 +469,8 @@ function storePrint(printData) {
     title: printData.title || null,
     cover: printData.cover || null,
     videoUrl: printData.videoUrl || null,
+    videoLocal: printData.videoLocal || null,
+    coverLocal: printData.coverLocal || null,
     status: printData.status,
     feedbackStatus: printData.feedbackStatus || null,
     startTime: printData.startTime || null,
@@ -457,7 +498,7 @@ function storePrint(printData) {
     snapShot: printData.snapShot || null
   };
   
-  return insertPrint.run(data);
+  return upsertPrint.run(data);
 }
 
 function storePrints(printsArray) {
