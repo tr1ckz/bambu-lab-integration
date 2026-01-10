@@ -207,6 +207,36 @@ function Printers() {
               )}
 
               <div className="printer-body">
+                {/* Always show AMS section if available */}
+                {(printer.ams || printer.current_task?.ams) && (
+                  <div style={{ marginBottom: '1rem', padding: '1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <div className="progress-ams">
+                      <div style={{ fontWeight: 600, marginBottom: '0.5rem', fontSize: '1.1rem', color: 'rgba(255,255,255,0.9)' }}>📦 AMS Filament</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem 0.75rem' }}>
+                        {(printer.ams || printer.current_task?.ams) && (
+                          <>
+                            {typeof (printer.ams?.active_tray ?? printer.current_task?.ams?.active_tray) === 'number' && (printer.ams?.active_tray ?? printer.current_task?.ams?.active_tray) !== 255 && <span className="chip subtle">Active Slot: {printer.ams?.active_tray ?? printer.current_task?.ams?.active_tray}</span>}
+                            {(amsExpanded[printer.dev_id] ? (printer.ams?.trays || printer.current_task?.ams?.trays || []) : (printer.ams?.trays || printer.current_task?.ams?.trays || []).slice(0,4)).map((t) => (
+                              <span key={t.slot} className="ams-chip" title={`Slot ${t.slot}: ${t.type || 'Unknown'}${t.sub_brands ? ` ${t.sub_brands}` : ''}${t.remain != null ? ` (${t.remain}% remaining)` : ''}`}>
+                                <span className="color-dot" style={{ background: `#${t.color}` || '#999' }} />
+                                S{t.slot}: {t.sub_brands || t.type || '—'}
+                                {t.remain != null && ` ${t.remain}%`}
+                                {typeof t.humidity === 'number' ? ` • ${Math.round(t.humidity)}%` : ''}
+                                {typeof t.temp === 'number' ? ` • ${Math.round(t.temp)}°C` : ''}
+                              </span>
+                            ))}
+                            {(printer.ams?.trays || printer.current_task?.ams?.trays || []).length > 4 && (
+                              <button type="button" className="btn-link" onClick={() => toggleAms(printer.dev_id)}>
+                                {amsExpanded[printer.dev_id] ? 'Show less' : `Show all (${(printer.ams?.trays || printer.current_task?.ams?.trays || []).length})`}
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {printer.current_task && printer.print_status === 'RUNNING' && (
                   <div className="current-job">
                     <div className="job-header">
@@ -287,66 +317,21 @@ function Printers() {
                         )}
                         {printer.current_task.ams && Array.isArray(printer.current_task.ams.trays) && printer.current_task.ams.trays.length > 0 ? (
                           <div className="progress-ams" style={{ marginTop: '0.5rem' }}>
-                            <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>AMS</div>
+                            <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>AMS (Current Print)</div>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem 0.75rem' }}>
                               {typeof printer.current_task.ams.active_tray === 'number' && printer.current_task.ams.active_tray !== 255 && <span className="chip subtle">Active Slot: {printer.current_task.ams.active_tray}</span>}
-                              {(amsExpanded[printer.dev_id] ? printer.current_task.ams.trays : printer.current_task.ams.trays.slice(0,4)).map((t) => (
-                                <span key={t.slot} className="ams-chip" title={`Slot ${t.slot}: ${t.type || 'Unknown'}${t.sub_brands ? ` ${t.sub_brands}` : ''}${t.remain != null ? ` (${t.remain}% remaining)` : ''}`}>
+                              {(amsExpanded[`print-${printer.dev_id}`] ? printer.current_task.ams.trays : printer.current_task.ams.trays.slice(0,2)).map((t) => (
+                                <span key={`print-${t.slot}`} className="ams-chip" title={`Slot ${t.slot}: ${t.type || 'Unknown'}${t.sub_brands ? ` ${t.sub_brands}` : ''}${t.remain != null ? ` (${t.remain}% remaining)` : ''}`}>
                                   <span className="color-dot" style={{ background: `#${t.color}` || '#999' }} />
-                                  S{t.slot}: {t.sub_brands || t.type || '—'}
-                                  {t.remain != null && ` ${t.remain}%`}
-                                  {typeof t.humidity === 'number' ? ` • ${Math.round(t.humidity)}%` : ''}
-                                  {typeof t.temp === 'number' ? ` • ${Math.round(t.temp)}°C` : ''}
+                                  S{t.slot}: {t.sub_brands || t.type || '—'} {typeof t.humidity === 'number' ? ` • ${Math.round(t.humidity)}%` : ''}
                                 </span>
                               ))}
-                              {printer.current_task.ams.trays && printer.current_task.ams.trays.length > 4 && (
-                                <button type="button" className="btn-link" onClick={() => toggleAms(printer.dev_id)}>
-                                  {amsExpanded[printer.dev_id] ? 'Show less' : `Show all (${printer.current_task.ams.trays.length})`}
-                                </button>
-                              )}
                             </div>
-                          </div>
-                        ) : printer.current_task.ams ? (
-                          <div className="progress-ams" style={{ marginTop: '0.5rem' }}>
-                            <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>AMS</div>
-                            <span className="chip subtle">No AMS trays reported</span>
                           </div>
                         ) : null}
                       </div>
                     )}
 
-                    {/* AMS Info - Always visible if available (when not printing) */}
-                    {!printer.current_task && printer.ams && Array.isArray(printer.ams.trays) && printer.ams.trays.length > 0 ? (
-                      <div style={{ marginBottom: '1rem', padding: '1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
-                        <div className="progress-ams">
-                          <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>AMS</div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem 0.75rem' }}>
-                            {typeof printer.ams.active_tray === 'number' && printer.ams.active_tray !== 255 && <span className="chip subtle">Active Slot: {printer.ams.active_tray}</span>}
-                            {(amsExpanded[printer.dev_id] ? printer.ams.trays : printer.ams.trays.slice(0,4)).map((t) => (
-                              <span key={t.slot} className="ams-chip" title={`Slot ${t.slot}: ${t.type || 'Unknown'}${t.sub_brands ? ` ${t.sub_brands}` : ''}${t.remain != null ? ` (${t.remain}% remaining)` : ''}`}>
-                                <span className="color-dot" style={{ background: `#${t.color}` || '#999' }} />
-                                S{t.slot}: {t.sub_brands || t.type || '—'}
-                                {t.remain != null && ` ${t.remain}%`}
-                                {typeof t.humidity === 'number' ? ` • ${Math.round(t.humidity)}%` : ''}
-                                {typeof t.temp === 'number' ? ` • ${Math.round(t.temp)}°C` : ''}
-                              </span>
-                            ))}
-                            {printer.ams.trays && printer.ams.trays.length > 4 && (
-                              <button type="button" className="btn-link" onClick={() => toggleAms(printer.dev_id)}>
-                                {amsExpanded[printer.dev_id] ? 'Show less' : `Show all (${printer.ams.trays.length})`}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (!printer.current_task && printer.ams ? (
-                      <div style={{ marginBottom: '1rem', padding: '1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
-                        <div className="progress-ams">
-                          <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>AMS</div>
-                          <span className="chip subtle">No AMS trays reported</span>
-                        </div>
-                      </div>
-                    ) : null)}
                   </div>
                 )}
 
