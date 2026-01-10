@@ -289,12 +289,12 @@ function Printers() {
                           <div className="progress-ams" style={{ marginTop: '0.5rem' }}>
                             <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>AMS</div>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem 0.75rem' }}>
-                              {typeof printer.current_task.ams.active_tray === 'number' && <span className="chip subtle">Active Slot: {printer.current_task.ams.active_tray}</span>}
+                              {typeof printer.current_task.ams.active_tray === 'number' && printer.current_task.ams.active_tray !== 255 && <span className="chip subtle">Active Slot: {printer.current_task.ams.active_tray}</span>}
                               {(amsExpanded[printer.dev_id] ? printer.current_task.ams.trays : printer.current_task.ams.trays.slice(0,4)).map((t) => (
-                                <span key={t.slot} className="ams-chip">
-                                  <span className="color-dot" style={{ background: t.color || '#999' }} />
-                                  S{t.slot}: {t.type || '—'}
-                                  {t.color ? ` (${t.color})` : ''}
+                                <span key={t.slot} className="ams-chip" title={`Slot ${t.slot}: ${t.type || 'Unknown'}${t.sub_brands ? ` ${t.sub_brands}` : ''}${t.remain != null ? ` (${t.remain}% remaining)` : ''}`}>
+                                  <span className="color-dot" style={{ background: `#${t.color}` || '#999' }} />
+                                  S{t.slot}: {t.sub_brands || t.type || '—'}
+                                  {t.remain != null && ` ${t.remain}%`}
                                   {typeof t.humidity === 'number' ? ` • ${Math.round(t.humidity)}%` : ''}
                                   {typeof t.temp === 'number' ? ` • ${Math.round(t.temp)}°C` : ''}
                                 </span>
@@ -321,12 +321,12 @@ function Printers() {
                         <div className="progress-ams">
                           <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>AMS</div>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem 0.75rem' }}>
-                            {typeof printer.ams.active_tray === 'number' && <span className="chip subtle">Active Slot: {printer.ams.active_tray}</span>}
+                            {typeof printer.ams.active_tray === 'number' && printer.ams.active_tray !== 255 && <span className="chip subtle">Active Slot: {printer.ams.active_tray}</span>}
                             {(amsExpanded[printer.dev_id] ? printer.ams.trays : printer.ams.trays.slice(0,4)).map((t) => (
-                              <span key={t.slot} className="ams-chip">
-                                <span className="color-dot" style={{ background: t.color || '#999' }} />
-                                S{t.slot}: {t.type || '—'}
-                                {t.color ? ` (${t.color})` : ''}
+                              <span key={t.slot} className="ams-chip" title={`Slot ${t.slot}: ${t.type || 'Unknown'}${t.sub_brands ? ` ${t.sub_brands}` : ''}${t.remain != null ? ` (${t.remain}% remaining)` : ''}`}>
+                                <span className="color-dot" style={{ background: `#${t.color}` || '#999' }} />
+                                S{t.slot}: {t.sub_brands || t.type || '—'}
+                                {t.remain != null && ` ${t.remain}%`}
                                 {typeof t.humidity === 'number' ? ` • ${Math.round(t.humidity)}%` : ''}
                                 {typeof t.temp === 'number' ? ` • ${Math.round(t.temp)}°C` : ''}
                               </span>

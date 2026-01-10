@@ -177,13 +177,19 @@ class BambuMqttClient extends EventEmitter {
 
         newJobData.ams = {
           active_tray: activeTray,
-          trays: trays.map((t, idx) => ({
-            slot: (t.id ?? t.slot ?? idx),
-            color: (t.color ?? t.tray_color ?? t.cols?.[0] ?? null),
-            type: (t.type ?? t.tray_type ?? null),
-            humidity: (t.humidity ?? t.humi ?? (amsUnit ? amsUnit.humidity : null)),
-            temp: (t.temp ?? t.temperature ?? (amsUnit ? amsUnit.temp : null))
-          }))
+          trays: trays.map((t, idx) => {
+            const humidityRaw = t.humidity ?? t.humi ?? (amsUnit ? amsUnit.humidity : null);
+            const tempRaw = t.temp ?? t.temperature ?? (amsUnit ? amsUnit.temp : null);
+            return {
+              slot: (t.id ?? t.slot ?? idx),
+              color: (t.color ?? t.tray_color ?? t.cols?.[0] ?? null),
+              type: (t.type ?? t.tray_type ?? null),
+              sub_brands: (t.tray_sub_brands ?? null),
+              remain: (t.remain != null && t.remain >= 0 ? t.remain : null),
+              humidity: humidityRaw != null ? parseFloat(humidityRaw) : null,
+              temp: tempRaw != null ? parseFloat(tempRaw) : null
+            };
+          })
         };
 
         logger.debug('Processed AMS data:', JSON.stringify(newJobData.ams, null, 2));

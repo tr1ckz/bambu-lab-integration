@@ -9,6 +9,18 @@ export interface Printer {
   nozzle_diameter: number;
   dev_structure: string;
   camera_rtsp_url?: string;
+  ams?: {
+    active_tray: number | null;
+    trays: Array<{
+      slot: number;
+      color: string | null;
+      type: string | null;
+      sub_brands?: string | null;
+      remain?: number | null;
+      humidity: number | null;
+      temp: number | null;
+    }>;
+  };
   current_task?: {
     name?: string;
     progress?: number;
@@ -42,6 +54,8 @@ export interface Printer {
         slot: number;
         color: string | null;
         type: string | null;
+        sub_brands?: string | null;
+        remain?: number | null;
         humidity: number | null;
         temp: number | null;
       }>;
